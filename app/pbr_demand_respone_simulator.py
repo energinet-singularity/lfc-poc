@@ -11,6 +11,7 @@ import lfc_kafka_topic_names as tp_nm
 import lfc_kafka_message_value_names as msg_val_nm
 import lfc_parameters as PARM
 
+# kafka brooker settings
 kafka_host = os.environ.get('KAFKA_HOST', "my-cluster-kafka-brokers")
 kafka_port = os.environ.get('KAFKA_PORT', "9092")
 
