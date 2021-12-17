@@ -347,4 +347,3 @@ def get_latest_topic_messages_to_dict_poll_based(consumer: KafkaConsumer, topic_
             add_to_log(f"Warning: No data was availiable on consumed Kafka Topic: '{topic}', value set to 'None'.")
 
     return topic_latest_message_value_dict
-
