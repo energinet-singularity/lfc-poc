@@ -1,4 +1,4 @@
-# topics names for LFC 
+# topics names for LFC
 
 # Source measurements for LFC input calc
 lfc_p_corr = 'lfc-p.correction.value'

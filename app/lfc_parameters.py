@@ -1,7 +1,7 @@
 # settings for LFC
 
 # Timouts
-TIMEOUT_MS_POLL = 100 # Kafka poll
+TIMEOUT_MS_POLL = 100
 
 # refresh rates
 REFRESH_RATE_MS_LFC_INPUT = 100
