@@ -192,27 +192,32 @@ def seek_topic_partitions_latest(consumer: KafkaConsumer, topic_list: list):
 def get_latest_topic_messages_to_dict(consumer: KafkaConsumer, topic_list: list, timeout_ms: int):
     """ Get latest message value per topic and return it in dictionary - using consumer loop
 
+    Latest message is determined on timestamp. Will loop all partitions.
+
     Arguments
 
     Returns:
 
     """
     # TODO put everything in a try catch
-    # TODO modify this to include timeout og retry logic
+    # TODO modify this to include timeout og retry logic?
     # TODO will seek to latest message, latest is indentified at startup (more messages can come durring runtime, how to take into account message arriving faster than read?)
 
-    #
+    # init dictionary with Topic -> TopicPartitions
     topic_partitions_dict = create_topic_partitions_dict(consumer=consumer, topic_list=topic_list)
 
-    # TODO rename til noget med "current"
-    first_offset_topic_partitions_dict = create_topic_partitions_begin_offsets_dict(consumer=consumer, topic_list=topic_list)
+    # init dictionary with Topic,TopicPartition -> begin_offset-1 unless 0 (used for tracking last read offset)
+    last_read_offset_topic_partition = create_topic_partitions_begin_offsets_dict(consumer=consumer, topic_list=topic_list)
+    for topic in topic_list:
+        for topic_partition in topic_partitions_dict[topic]:
+            begin_offset = last_read_offset_topic_partition[topic][topic_partition]
+            if begin_offset != 0:
+                last_read_offset_topic_partition[topic][topic_partition] = last_read_offset_topic_partition[topic][topic_partition]-1
 
     # dictionary for holding latest timestamp and value for each consumed topic
     # TODO make as function
     topic_latest_message_timestamp_dict = {}
     topic_latest_message_value_dict = {}
-
-    # init dictionarys for all topics
     for topic in topic_list:
         topic_latest_message_timestamp_dict[topic] = 0
         topic_latest_message_value_dict[topic] = None
@@ -221,43 +226,35 @@ def get_latest_topic_messages_to_dict(consumer: KafkaConsumer, topic_list: list,
     if not seek_topic_partitions_latest(consumer=consumer, topic_list=topic_list):
         sys.exit(1)
 
-    #
+    # init dictionary with Topic,TopicPartition -> end_offset
     last_offset_dict = create_topic_partitions_end_offsets_dict(consumer=consumer, topic_list=topic_list)
 
     for message in consumer:
 
         # add_to_log(f"Message: '{message.value}' has offset: {message.offset}")
 
-        #
-        first_offset_topic_partitions_dict[message.topic][TopicPartition(message.topic, message.partition)] = message.offset
-
-        #
+        # if timestamp of read message is newer that last read message from topic, update dict
         if message.timestamp > topic_latest_message_timestamp_dict[message.topic]:
             topic_latest_message_timestamp_dict[message.topic] = message.timestamp
             topic_latest_message_value_dict[message.topic] = message.value
 
-        #
-        consumer.commit()
+        # update last read mesage offset
+        last_read_offset_topic_partition[message.topic][TopicPartition(message.topic, message.partition)] = message.offset
 
-        #
+        # Make list of partitions for which last message offset has not yet been reached
         topic_partitions_not_reached_last_offset = []
-
-        #
         for topic in topic_list:
             for topic_partition in topic_partitions_dict[topic]:
-
-                if first_offset_topic_partitions_dict[topic][topic_partition] < last_offset_dict[topic][topic_partition]-1:
+                if last_read_offset_topic_partition[topic][topic_partition] < last_offset_dict[topic][topic_partition]-1:
+                    # TODO verify if this works for empty topic and topic with ie. begin offset 246
                     topic_partitions_not_reached_last_offset.append(topic_partition)
 
-        #
+        # If all partions have been consumed till latest offset, break out of conusmer loop
         count_part = len(topic_partitions_not_reached_last_offset)
-
-        #
         if count_part == 0:
             break
-        # else hvis alle data
 
-    # Verify if data was availiable
+    # Verify if data was availiable for alle topic
     for topic in topic_list:
         if topic_latest_message_value_dict[topic] is None:
             add_to_log(f"Info: No data was availiable on consumed Kafka Topic: '{topic}', value set to: 'None'.")
@@ -275,24 +272,34 @@ def get_latest_topic_messages_to_dict_poll_based(consumer: KafkaConsumer, topic_
     """
     # TODO modify this to use timeout instead of amount of polls?
 
-    # Seek all partitions for consumed topics to latest availiable message
-    if not seek_topic_partitions_latest(consumer=consumer, topic_list=topic_list):
-        sys.exit(1)
+    # init dictionary with Topic -> TopicPartitions
+    topic_partitions_dict = create_topic_partitions_dict(consumer=consumer, topic_list=topic_list)
 
-    poll_count = 0
-    poll_max = 10
+    # init dictionary with Topic,TopicPartition -> begin_offset-1 unless 0 (used for tracking last read offset)
+    last_read_offset_topic_partition = create_topic_partitions_begin_offsets_dict(consumer=consumer, topic_list=topic_list)
+    for topic in topic_list:
+        for topic_partition in topic_partitions_dict[topic]:
+            begin_offset = last_read_offset_topic_partition[topic][topic_partition]
+            if begin_offset != 0:
+                last_read_offset_topic_partition[topic][topic_partition] = last_read_offset_topic_partition[topic][topic_partition]-1
 
     # dictionary for holding latest timestamp and value for each consumed topic
+    # TODO make as function
     topic_latest_message_timestamp_dict = {}
     topic_latest_message_value_dict = {}
-
-    # init dictionarys for all topics
     for topic in topic_list:
         topic_latest_message_timestamp_dict[topic] = 0
         topic_latest_message_value_dict[topic] = None
 
-    # topic partition dict
-    topic_partitions_dict = create_topic_partitions_dict(consumer=consumer, topic_list=topic_list)
+    # Seek all partitions for consumed topics to latest availiable message
+    if not seek_topic_partitions_latest(consumer=consumer, topic_list=topic_list):
+        sys.exit(1)
+
+    # init dictionary with Topic,TopicPartition -> end_offset
+    last_offset_dict = create_topic_partitions_end_offsets_dict(consumer=consumer, topic_list=topic_list)
+
+    poll_count = 0
+    poll_max = 10
 
     is_polling = True
 
@@ -316,12 +323,26 @@ def get_latest_topic_messages_to_dict_poll_based(consumer: KafkaConsumer, topic_
                             if data_object[topic_partion][x].timestamp > topic_latest_message_timestamp_dict[topic]:
                                 topic_latest_message_timestamp_dict[topic] = data_object[topic_partion][x].timestamp
                                 topic_latest_message_value_dict[topic] = data_object[topic_partion][x].value
-        else:
-            if poll_count > poll_max:
-                is_polling = False
+                            # update last read mesage offset
+                            last_read_offset_topic_partition[topic][topic_partion] = data_object[topic_partion][x].offset
 
-        # TOTO use timeout and max polls instead
-        sleep(0.001)
+        # TODO build timeout or use max polls?
+        # else:
+            # if poll_count > poll_max:
+                # is_polling = False
+
+        # Make list of partitions for which last message offset has not yet been reached
+        topic_partitions_not_reached_last_offset = []
+        for topic in topic_list:
+            for topic_partition in topic_partitions_dict[topic]:
+                if last_read_offset_topic_partition[topic][topic_partition] < last_offset_dict[topic][topic_partition]-1:
+                    # TODO verify if this works for empty topic and topic with ie. begin offset 246
+                    topic_partitions_not_reached_last_offset.append(topic_partition)
+
+        # If all partions have been consumed till latest offset, break out of conusmer loop
+        count_part = len(topic_partitions_not_reached_last_offset)
+        if count_part == 0:
+            is_polling = False
 
     # Verify if data was availiable
     for topic in topic_list:

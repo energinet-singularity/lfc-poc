@@ -1,6 +1,4 @@
 from datetime import datetime
-
-
 import lfc_parameters as PARM
 
 

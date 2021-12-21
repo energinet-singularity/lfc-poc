@@ -1,7 +1,7 @@
-from time import sleep
+from time import sleep, time
 import sys
 import os
-from functions_kafka import init_producer, init_consumer, init_topic_partitions, subscribe_topics, topics_exists, get_latest_topic_messages_to_dict, produce_message
+from functions_kafka import init_producer, init_consumer, init_topic_partitions, produce_message, subscribe_topics, topics_exists, get_latest_topic_messages_to_dict, get_latest_topic_messages_to_dict_poll_based
 from functions_lfc import add_to_log, simulate_pbr_response
 
 # importing settings
@@ -52,13 +52,18 @@ if not topics_exists(consumer=consumer_kafka, topic_list=topics_consumed_list):
 
 while True:
 
+    time_pbr_simu_loop_start = time()
+
     # TODO verify here if kafka brooker is availiable or just exit and thereby restart container
     # TODO verify if topics are subscribed (is i necessary to check durring runtime)
     # TODO Verify if partitions assigned or just exit and thereby restart container
     # TODO Log time consumption as info
 
     # Getting latest value for each topic
-    topic_latest_message_value_dict = get_latest_topic_messages_to_dict(consumer=consumer_kafka, topic_list=topics_consumed_list, timeout_ms=PARM.TIMEOUT_MS_POLL)
+    time_message_get_start = time()
+    # topic_latest_message_value_dict = get_latest_topic_messages_to_dict(consumer=consumer_kafka, topic_list=topics_consumed_list, timeout_ms=PARM.TIMEOUT_MS_POLL)
+    topic_latest_message_value_dict = get_latest_topic_messages_to_dict_poll_based(consumer=consumer_kafka, topic_list=topics_consumed_list, timeout_ms=PARM.TIMEOUT_MS_POLL)
+    add_to_log(f"Getting messages took: {round(time()-time_message_get_start,3)} secounds.")
 
     # extract value, topic specific, and round to decimals defined by precision varialbe
     # TODO simplify/make smarter
@@ -89,22 +94,12 @@ while True:
 
     # send current pbr repsonce to kafka topic
     produce_message(producer=producer_kafka, topic_name=tp_nm.lfc_pbr_response, value={msg_val_nm.lfc_pbr_response: response_pbr})
-    #try:
-        #producer_kafka.send(tp_nm.lfc_pbr_response, value={msg_val_nm.lfc_pbr_response: response_pbr})
-    #except Exception as e:
-        #add_to_log(f"Error: Sending message to Kafka failed with message '{e}'.")
-        #sys.exit(1)
-    add_to_log(f"PBR Response is now: {response_pbr}")
 
     # send system responce (sum of mw diff and PBR response) to kafka topic
     response_system = round(current_lfc_mw_diff+response_pbr, PARM.PRECISION_DECIMALS)
     produce_message(producer=producer_kafka, topic_name=tp_nm.lfc_p_dem, value={msg_val_nm.lfc_p_dem: response_system})
-    #try:
-        #producer_kafka.send(tp_nm.lfc_p_dem, value={msg_val_nm.lfc_p_dem: response_system})
-    #except Exception as e:
-        #add_to_log(f"Error: Sending message to Kafka failed with message: '{e}'.")
-        #sys.exit(1)
     add_to_log(f"System response: {response_system} was send as new LFC demand")
 
+    add_to_log(f"Loop took: {round(time()-time_pbr_simu_loop_start,3)} secounds.")
     add_to_log("|-------------------------------------------------|")
     sleep(PARM.REFRESH_RATE_S_LFC_DEM_SIMU)
