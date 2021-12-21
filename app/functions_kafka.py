@@ -81,7 +81,8 @@ def init_topic_partitions(consumer: KafkaConsumer, topic_list: list, timeout_ms:
 
     """
 
-    # xxx fix. When making dummy poll, if auto comit is enabled, then the offset will shift unessecary
+    # TODO check if using a dummy poll is the correct way
+    # TODO handle that when making dummy poll, if auto comit is enabled, then the offset will shift unessecary
     try:
         consumer.poll(timeout_ms=timeout_ms)
         add_to_log("Info: Initial poll done. TopicPartition are now assigned")
@@ -211,21 +212,17 @@ def get_latest_topic_messages_to_dict(consumer: KafkaConsumer, topic_list: list,
     Returns:
 
     """
-    # xxx modify this to include timeout og retry logic
-    # xxx will seek to latest message, latest is indentified at startup (more messages can come durring runtime) - problem hvis beskeder kommer hurtigt ind - how to solve?
+    # TODO modify this to include timeout og retry logic
+    # TODO will seek to latest message, latest is indentified at startup (more messages can come durring runtime, how to take into account message arriving faster than read?)
 
     #
     topic_partitions_dict = create_topic_partitions_dict(consumer=consumer, topic_list=topic_list)
 
-    #
-    # first_offset_topic_partitions_dict = {}
-    # for topic in topic_list:
-    # first_offset_topic_partitions_dict[topic] = consumer.beginning_offsets([TopicPartition(topic, p) for p in consumer.partitions_for_topic(topic)])
-    # xxx rename til noget med "current"
+    # TODO rename til noget med "current"
     first_offset_topic_partitions_dict = create_topic_partitions_begin_offsets_dict(consumer=consumer, topic_list=topic_list)
 
     # dictionary for holding latest timestamp and value for each consumed topic
-    # xxx make as function
+    # TODO make as function
     topic_latest_message_timestamp_dict = {}
     topic_latest_message_value_dict = {}
 
@@ -242,8 +239,6 @@ def get_latest_topic_messages_to_dict(consumer: KafkaConsumer, topic_list: list,
     last_offset_dict = create_topic_partitions_end_offsets_dict(consumer=consumer, topic_list=topic_list)
 
     for message in consumer:
-
-        # xxx seek til latest i loop?
 
         # add_to_log(f"Message: '{message.value}' has offset: {message.offset}")
 
@@ -292,7 +287,7 @@ def get_latest_topic_messages_to_dict_poll_based(consumer: KafkaConsumer, topic_
     Returns:
 
     """
-    # xxx modify this to use timeout instead of amount of polls
+    # TODO modify this to use timeout instead of amount of polls?
 
     # Seek all partitions for consumed topics to latest availiable message
     if not seek_topic_partitions_latest(consumer=consumer, topic_list=topic_list):
@@ -317,7 +312,6 @@ def get_latest_topic_messages_to_dict_poll_based(consumer: KafkaConsumer, topic_
 
     # poll data
     while is_polling:
-        # xxx byg timeout for at håndtere tom data pakke og sat en parm for max antal polls
 
         data_object = consumer.poll(timeout_ms=timeout_ms, max_records=None)
         poll_count += 1
@@ -340,7 +334,7 @@ def get_latest_topic_messages_to_dict_poll_based(consumer: KafkaConsumer, topic_
             if poll_count > poll_max:
                 is_polling = False
 
-        # xxx erstat med timeout og max antal polls
+        # TOTO use timeout and max polls instead
         sleep(0.001)
 
     # Verify if data was availiable

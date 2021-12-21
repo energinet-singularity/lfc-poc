@@ -32,7 +32,6 @@ topic_latest_message_value_dict = {}
 # Kafka producer init
 producer_kafka = init_producer(bootstrap_servers=kafka_host)
 
-
 # Kafka consumer
 consumer_kafka = init_consumer(bootstrap_servers=kafka_host, group_id=consumer_gp_nm, auto_offset_reset='earliest', enable_auto_commit=False)
 
@@ -46,26 +45,27 @@ add_to_log("Simulating LFC Demand response....")
 add_to_log("|-------------------------------------------------|")
 
 # Verify if all needed topics exist in kafka brooker
-# xxx is slowish. keep here or add in loop?
+# TODO is slowish. keep here or add in loop to verify if topics exist durring runtime or just let it exit and thereby restart container
 if not topics_exists(consumer=consumer_kafka, topic_list=topics_consumed_list):
     sys.exit(1)
 
 while True:
 
-    # xxx check om kafka brookeren er klar, ellers retry og exit?
-    # xxx verify om topics er subscribed
-    # xxx Verify if partiotions assigned hvordan?
-    # xxx log tidforbrug per run og tjeck det
+    # TODO verify here if kafka brooker is availiable or just exit and thereby restart container
+    # TODO verify if topics are subscribed (is i necessary to check durring runtime)
+    # TODO Verify if partitions assigned or just exit and thereby restart container
+    # TODO Log time consumption as info
 
     # Getting latest value for each topic
     topic_latest_message_value_dict = get_latest_topic_messages_to_dict(consumer=consumer_kafka, topic_list=topics_consumed_list, timeout_ms=PARM.TIMEOUT_MS_POLL)
 
     # extract value, topic specific, and round to decimals defined by precision varialbe
+    # TODO simplify
     if topic_latest_message_value_dict[tp_nm.lfc_p_target] is None:
         add_to_log(f"Warning: Value: {msg_val_nm.lfc_p_target} is not avialiable from topic: '{tp_nm.lfc_p_target}'. Setting to zero.")
         current_lfc_p_target = 0
     else:
-        # xxx byg sikring mod forkert data value name
+        # TODO byg sikring mod forkert data value name
         current_lfc_p_target = round(topic_latest_message_value_dict[tp_nm.lfc_p_target][msg_val_nm.lfc_p_target], PARM.PRECISION_DECIMALS)
 
     if topic_latest_message_value_dict[tp_nm.lfc_mw_diff] is None:
