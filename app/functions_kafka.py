@@ -1,23 +1,8 @@
 from kafka import KafkaProducer, KafkaConsumer, TopicPartition
 from json import dumps, loads
-from datetime import datetime
 from time import sleep
 import sys
-
-
-def add_to_log(message: str):
-    """Prints message to terminal with timestamp.
-
-    bla bla.
-
-    Arguments:
-    timeout_ms (str): log message
-
-    Returns:
-    ?
-
-    """
-    print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3], message)
+from functions_lfc import add_to_log
 
 
 def init_producer(bootstrap_servers: list):
@@ -85,7 +70,7 @@ def init_topic_partitions(consumer: KafkaConsumer, topic_list: list, timeout_ms:
     # TODO handle that when making dummy poll, if auto comit is enabled, then the offset will shift unessecary
     try:
         consumer.poll(timeout_ms=timeout_ms)
-        add_to_log("Info: Initial poll done. TopicPartition are now assigned")
+        add_to_log("Info: Initial poll done. TopicPartitions are now assigned.")
     except Exception as e:
         add_to_log(f"Error: Initial poll failed with message '{e}'.")
         sys.exit(1)
@@ -212,6 +197,7 @@ def get_latest_topic_messages_to_dict(consumer: KafkaConsumer, topic_list: list,
     Returns:
 
     """
+    # TODO put everything in a try catch
     # TODO modify this to include timeout og retry logic
     # TODO will seek to latest message, latest is indentified at startup (more messages can come durring runtime, how to take into account message arriving faster than read?)
 
@@ -343,3 +329,15 @@ def get_latest_topic_messages_to_dict_poll_based(consumer: KafkaConsumer, topic_
             add_to_log(f"Warning: No data was availiable on consumed Kafka Topic: '{topic}', value set to 'None'.")
 
     return topic_latest_message_value_dict
+
+
+def produce_message(producer: KafkaProducer, topic_name: str, value: bytes):
+    """ Producer
+
+    """
+    try:
+        producer.send(topic_name, value=value)
+        return True
+    except Exception as e:
+        add_to_log(f"Error: Sending message to Kafka failed with message: '{e}'.")
+        sys.exit(1)

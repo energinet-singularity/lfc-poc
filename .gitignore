@@ -127,3 +127,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# simualtor for signals - not for git
+test_signal_gen.ipynb

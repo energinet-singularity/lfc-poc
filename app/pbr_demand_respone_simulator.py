@@ -1,7 +1,8 @@
 from time import sleep
 import sys
 import os
-from kafka_helper_functions import add_to_log, init_producer, init_consumer, init_topic_partitions, subscribe_topics, topics_exists, get_latest_topic_messages_to_dict
+from functions_kafka import init_producer, init_consumer, init_topic_partitions, subscribe_topics, topics_exists, get_latest_topic_messages_to_dict, produce_message
+from functions_lfc import add_to_log, simulate_pbr_response
 
 # importing settings
 import lfc_kafka_topic_names as tp_nm
@@ -60,7 +61,7 @@ while True:
     topic_latest_message_value_dict = get_latest_topic_messages_to_dict(consumer=consumer_kafka, topic_list=topics_consumed_list, timeout_ms=PARM.TIMEOUT_MS_POLL)
 
     # extract value, topic specific, and round to decimals defined by precision varialbe
-    # TODO simplify
+    # TODO simplify/make smarter
     if topic_latest_message_value_dict[tp_nm.lfc_p_target] is None:
         add_to_log(f"Warning: Value: {msg_val_nm.lfc_p_target} is not avialiable from topic: '{tp_nm.lfc_p_target}'. Setting to zero.")
         current_lfc_p_target = 0
@@ -84,36 +85,25 @@ while True:
     add_to_log(f"MW diff is: {current_lfc_mw_diff}")
 
     # simulate PBR responce
-    # if target was reached within a deadband, then do not ramp
-    if abs(current_lfc_p_target) - (PARM.DEADBAND_PBR_SIMU) < abs(last_pbr_response) < abs(current_lfc_p_target) + (PARM.DEADBAND_PBR_SIMU):
-        add_to_log("PBR did not ramp due to deadband.")
-        response_pbr = last_pbr_response
-    # if ramping down is needed
-    elif last_pbr_response > current_lfc_p_target:
-        add_to_log("PBR is regulating down.")
-        response_pbr = round(last_pbr_response - (PARM.PBR_RAMP_MWS*PARM.REFRESH_RATE_S_LFC_DEM_SIMU), PARM.PRECISION_DECIMALS)
-    # if ramping up is needed
-    elif last_pbr_response < current_lfc_p_target:
-        add_to_log("PBR is regulating up.")
-        response_pbr = round(last_pbr_response + (PARM.PBR_RAMP_MWS*PARM.REFRESH_RATE_S_LFC_DEM_SIMU), PARM.PRECISION_DECIMALS)
+    response_pbr = simulate_pbr_response(p_target=current_lfc_p_target, last_pbr_response=last_pbr_response)
 
     # send current pbr repsonce to kafka topic
-    try:
-        producer_kafka.send(tp_nm.lfc_pbr_response, value={msg_val_nm.lfc_pbr_response: response_pbr})
-    except Exception as e:
-        add_to_log(f"Error: Sending message to Kafka failed with message '{e}'.")
-        sys.exit(1)
-
+    produce_message(producer=producer_kafka, topic_name=tp_nm.lfc_pbr_response, value={msg_val_nm.lfc_pbr_response: response_pbr})
+    #try:
+        #producer_kafka.send(tp_nm.lfc_pbr_response, value={msg_val_nm.lfc_pbr_response: response_pbr})
+    #except Exception as e:
+        #add_to_log(f"Error: Sending message to Kafka failed with message '{e}'.")
+        #sys.exit(1)
     add_to_log(f"PBR Response is now: {response_pbr}")
 
     # send system responce (sum of mw diff and PBR response) to kafka topic
     response_system = round(current_lfc_mw_diff+response_pbr, PARM.PRECISION_DECIMALS)
-    try:
-        producer_kafka.send(tp_nm.lfc_p_dem, value={msg_val_nm.lfc_p_dem: response_system})
-    except Exception as e:
-        add_to_log(f"Error: Sending message to Kafka failed with message: '{e}'.")
-        sys.exit(1)
-
+    produce_message(producer=producer_kafka, topic_name=tp_nm.lfc_p_dem, value={msg_val_nm.lfc_p_dem: response_system})
+    #try:
+        #producer_kafka.send(tp_nm.lfc_p_dem, value={msg_val_nm.lfc_p_dem: response_system})
+    #except Exception as e:
+        #add_to_log(f"Error: Sending message to Kafka failed with message: '{e}'.")
+        #sys.exit(1)
     add_to_log(f"System response: {response_system} was send as new LFC demand")
 
     add_to_log("|-------------------------------------------------|")
