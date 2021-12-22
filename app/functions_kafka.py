@@ -1,6 +1,5 @@
 from kafka import KafkaProducer, KafkaConsumer, TopicPartition
 from json import dumps, loads
-from time import sleep
 import sys
 from functions_lfc import add_to_log
 
@@ -15,7 +14,8 @@ def init_producer(bootstrap_servers: list):
 
     """
     try:
-        producer_kafka = KafkaProducer(bootstrap_servers=bootstrap_servers, value_serializer=lambda x: dumps(x).encode('utf-8'))
+        producer_kafka = KafkaProducer(bootstrap_servers=bootstrap_servers,
+                                       value_serializer=lambda x: dumps(x).encode('utf-8'))
         add_to_log("Info: Kafka producer connection established.")
         return producer_kafka
     except Exception as e:
@@ -32,7 +32,10 @@ def init_consumer(bootstrap_servers: list, group_id: str, auto_offset_reset: str
 
     """
     try:
-        consumer_kafka = KafkaConsumer(bootstrap_servers=bootstrap_servers, group_id=group_id, value_deserializer=lambda x: loads(x.decode('utf-8')), auto_offset_reset='earliest', enable_auto_commit=False)
+        consumer_kafka = KafkaConsumer(bootstrap_servers=bootstrap_servers,
+                                       group_id=group_id,
+                                       value_deserializer=lambda x: loads(x.decode('utf-8')),
+                                       auto_offset_reset='earliest', enable_auto_commit=False)
         add_to_log("Info: Kafka consumer connection established.")
         return consumer_kafka
     except Exception as e:
@@ -242,6 +245,7 @@ def get_latest_topic_messages_to_dict(consumer: KafkaConsumer, topic_list: list,
         last_read_offset_topic_partition[message.topic][TopicPartition(message.topic, message.partition)] = message.offset
 
         # Make list of partitions for which last message offset has not yet been reached
+        # TODO make function
         topic_partitions_not_reached_last_offset = []
         for topic in topic_list:
             for topic_partition in topic_partitions_dict[topic]:

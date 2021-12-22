@@ -5,9 +5,9 @@ from functions_kafka import init_producer, init_consumer, init_topic_partitions,
 from functions_lfc import add_to_log, simulate_pbr_response
 
 # importing settings
-import lfc_kafka_topic_names as tp_nm
-import lfc_kafka_message_value_names as msg_val_nm
-import lfc_parameters as PARM
+import parm_kafka_topic_nm as tp_nm
+import parm_kafka_msg_val_nm as msg_val_nm
+import parm_general as PARM
 
 # kafka brooker settings
 kafka_host = os.environ.get('KAFKA_HOST', "my-cluster-kafka-brokers")
@@ -84,7 +84,7 @@ while True:
         add_to_log(f"Warning: Value: {msg_val_nm.lfc_pbr_response} is not avialiable from topic: '{tp_nm.lfc_pbr_response}'. Setting to zero.")
         last_pbr_response = 0
     else:
-        last_pbr_response = round(topic_latest_message_value_dict[tp_nm.lfc_pbr_response][msg_val_nm.lfc_pbr_response], PARM.PRECISION_DECIMALS)
+        last_pbr_response = round(topic_latest_message_value_dict[tp_nm.lfc_pbr_response][msg_val_nm.lfc_pbr_response],PARM.PRECISION_DECIMALS)
 
     add_to_log(f"Current target is: {current_lfc_p_target}")
     add_to_log(f"MW diff is: {current_lfc_mw_diff}")
@@ -93,11 +93,13 @@ while True:
     response_pbr = simulate_pbr_response(p_target=current_lfc_p_target, last_pbr_response=last_pbr_response)
 
     # send current pbr repsonce to kafka topic
-    produce_message(producer=producer_kafka, topic_name=tp_nm.lfc_pbr_response, value={msg_val_nm.lfc_pbr_response: response_pbr})
+    produce_message(producer=producer_kafka, topic_name=tp_nm.lfc_pbr_response,
+                    value={msg_val_nm.lfc_pbr_response: response_pbr})
 
     # send system responce (sum of mw diff and PBR response) to kafka topic
     response_system = round(current_lfc_mw_diff+response_pbr, PARM.PRECISION_DECIMALS)
-    produce_message(producer=producer_kafka, topic_name=tp_nm.lfc_p_dem, value={msg_val_nm.lfc_p_dem: response_system})
+    produce_message(producer=producer_kafka, topic_name=tp_nm.lfc_p_dem,
+                    value={msg_val_nm.lfc_p_dem: response_system})
     add_to_log(f"System response: {response_system} was send as new LFC demand")
 
     add_to_log(f"Loop took: {round(time()-time_pbr_simu_loop_start,3)} secounds.")

@@ -1,5 +1,5 @@
 from datetime import datetime
-import lfc_parameters as PARM
+import parm_general as PARM
 
 
 def add_to_log(message: str):

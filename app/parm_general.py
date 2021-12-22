@@ -1,6 +1,4 @@
-# settings for LFC
-
-# Timouts
+# Timout for poll
 TIMEOUT_MS_POLL = 100
 
 # refresh rates
