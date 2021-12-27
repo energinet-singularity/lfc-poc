@@ -93,7 +93,6 @@ def subscribe_topics(consumer: KafkaConsumer, topic_list: list):
 
 def topics_exists(consumer: KafkaConsumer, topic_list: list):
     """ Verify if topics exist in Kafka Brooker.
-
     Arguments:
 
     Returns:

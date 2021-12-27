@@ -10,17 +10,15 @@ import parm_kafka_topic_nm as tp_nm
 import parm_kafka_msg_val_nm as msg_val_nm
 import parm_general as PARM
 
+# Start...
+add_to_log("Info: LFC demand response simulation initializing.")
+
 # kafka brooker settings
 kafka_host = os.environ.get('KAFKA_HOST', "my-cluster-kafka-brokers")
 kafka_port = os.environ.get('KAFKA_PORT', "9092")
 
 if ':' not in kafka_host and kafka_port != "":
     kafka_host += f":{kafka_port}"
-
-add_to_log(f"Info: Kafka Host is: {kafka_host}")
-
-# Start...
-add_to_log("Info: LFC demand response simulation initializing.")
 
 # Kafka consumergroup name
 consumer_gp_nm = "lfc_demand_response_simu"
@@ -59,10 +57,8 @@ while True:
 
     time_pbr_simu_loop_start = time()
 
-    # TODO verify here if kafka brooker is availiable or just exit and thereby restart container
     # TODO verify if topics are subscribed (is i necessary to check durring runtime)
     # TODO Verify if partitions assigned or just exit and thereby restart container
-    # TODO Log time consumption as info
 
     # Getting latest value for each topic
     time_message_get_start = time()
@@ -75,7 +71,7 @@ while True:
     if topics_empty:
         add_to_log(f"Warning: No data was availiable on consumed Kafka Topic(s): {topics_empty}.")
 
-    add_to_log(f"Getting messages took: {round(time()-time_message_get_start,3)} secounds.")
+    add_to_log(f"Debug: Getting messages took: {round(time()-time_message_get_start,3)} secounds.")
 
     # extract value, topic specific, and round to decimals defined by precision varialbe
     # TODO simplify/make smarter
@@ -111,7 +107,8 @@ while True:
     response_pbr = simulate_pbr_response(p_target=current_lfc_p_target, last_pbr_response=last_pbr_response)
 
     # send current pbr repsonce to kafka topic
-    produce_message(producer=producer_kafka, topic_name=tp_nm.lfc_pbr_response,
+    produce_message(producer=producer_kafka,
+                    topic_name=tp_nm.lfc_pbr_response,
                     value={msg_val_nm.lfc_pbr_response: response_pbr})
 
     # send system responce (sum of mw diff and PBR response) to kafka topic
@@ -120,6 +117,6 @@ while True:
                     value={msg_val_nm.lfc_p_dem: response_system})
     add_to_log(f"System response: {response_system} was send as new LFC demand")
 
-    add_to_log(f"Loop took: {round(time()-time_pbr_simu_loop_start,3)} secounds.")
+    add_to_log(f"Debug: Loop took: {round(time()-time_pbr_simu_loop_start,3)} secounds.")
     add_to_log("|-------------------------------------------------|")
     sleep(PARM.REFRESH_RATE_S_LFC_DEM_SIMU)
