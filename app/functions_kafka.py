@@ -106,6 +106,18 @@ def topics_exists(consumer: KafkaConsumer, topic_list: list):
         return True
 
 
+def init_topic_latest_msg_dicts(topic_list: list):
+    """
+
+    """
+    topic_latest_message_timestamp_dict = {}
+    topic_latest_message_value_dict = {}
+    for topic in topic_list:
+        topic_latest_message_timestamp_dict[topic] = 0
+        topic_latest_message_value_dict[topic] = None
+    return topic_latest_message_timestamp_dict, topic_latest_message_value_dict
+
+
 def create_topic_partitions_dict(consumer: KafkaConsumer, topic_list: list):
     """ Create a dictionary with partions avlaiable for each topic.
 
@@ -210,6 +222,7 @@ def get_latest_topic_messages_to_dict(consumer: KafkaConsumer, topic_list: list,
     topic_partitions_dict = create_topic_partitions_dict(consumer=consumer, topic_list=topic_list)
 
     # init dictionary with Topic,TopicPartition -> begin_offset-1 unless 0 (used for tracking last read offset)
+    # TODO make function
     last_read_offset_topic_partition = create_topic_partitions_begin_offsets_dict(consumer=consumer, topic_list=topic_list)
     for topic in topic_list:
         for topic_partition in topic_partitions_dict[topic]:
@@ -280,6 +293,7 @@ def get_latest_topic_messages_to_dict_poll_based(consumer: KafkaConsumer, topic_
     topic_partitions_dict = create_topic_partitions_dict(consumer=consumer, topic_list=topic_list)
 
     # init dictionary with Topic,TopicPartition -> begin_offset-1 unless 0 (used for tracking last read offset)
+    # TODO make as function (does it work for all, what about 0)
     last_read_offset_topic_partition = create_topic_partitions_begin_offsets_dict(consumer=consumer, topic_list=topic_list)
     for topic in topic_list:
         for topic_partition in topic_partitions_dict[topic]:
@@ -288,12 +302,8 @@ def get_latest_topic_messages_to_dict_poll_based(consumer: KafkaConsumer, topic_
                 last_read_offset_topic_partition[topic][topic_partition] = last_read_offset_topic_partition[topic][topic_partition]-1
 
     # dictionary for holding latest timestamp and value for each consumed topic
-    # TODO make as function
-    topic_latest_message_timestamp_dict = {}
-    topic_latest_message_value_dict = {}
-    for topic in topic_list:
-        topic_latest_message_timestamp_dict[topic] = 0
-        topic_latest_message_value_dict[topic] = None
+    topic_latest_message_timestamp_dict, topic_latest_message_value_dict = init_topic_latest_msg_dicts(topic_list=topic_list)
+    add_to_log(f"last read offset: {last_read_offset_topic_partition}")
 
     # Seek all partitions for consumed topics to latest availiable message
     if not seek_topic_partitions_latest(consumer=consumer, topic_list=topic_list):
@@ -301,9 +311,10 @@ def get_latest_topic_messages_to_dict_poll_based(consumer: KafkaConsumer, topic_
 
     # init dictionary with Topic,TopicPartition -> end_offset
     last_offset_dict = create_topic_partitions_end_offsets_dict(consumer=consumer, topic_list=topic_list)
+    add_to_log(f"end offset: {last_offset_dict}")
 
     poll_count = 0
-    poll_max = 10
+    #poll_max = 10
 
     is_polling = True
 

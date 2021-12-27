@@ -16,6 +16,8 @@ kafka_port = os.environ.get('KAFKA_PORT', "9092")
 if ':' not in kafka_host and kafka_port != "":
     kafka_host += f":{kafka_port}"
 
+add_to_log(f"Info: Kafka Host is: {kafka_host}")
+
 # Start...
 add_to_log("Info: LFC demand response simulation initializing.")
 
@@ -24,7 +26,8 @@ consumer_gp_nm = "lfc_demand_response_simu"
 
 # list of topic names (produced to, consumed from and combined list)
 topics_produced_list = [tp_nm.lfc_p_dem, tp_nm.lfc_pbr_response]
-topics_consumed_list = [tp_nm.lfc_p_target, tp_nm.lfc_mw_diff, tp_nm.lfc_pbr_response]
+#topics_consumed_list = [tp_nm.lfc_p_target, tp_nm.lfc_mw_diff, tp_nm.lfc_pbr_response]
+topics_consumed_list = [tp_nm.lfc_p_target, tp_nm.lfc_mw_diff, tp_nm.lfc_pbr_response, tp_nm.lfc_p_input]
 topics_list = list(set(topics_produced_list + topics_consumed_list))
 
 # dictionary for holding latest message value for each consumed topic
