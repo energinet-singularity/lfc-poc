@@ -130,3 +130,6 @@ dmypy.json
 
 # simualtor for signals - not for git
 test_signal_gen.ipynb
+
+# docker compose
+docker-compose.yaml
