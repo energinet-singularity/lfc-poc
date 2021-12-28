@@ -1,7 +1,21 @@
 from kafka import KafkaProducer, KafkaConsumer, TopicPartition
 from json import dumps, loads
 import sys
+import os
 from functions_lfc import add_to_log
+
+
+def set_kafka_brooker_from_env():
+    """
+
+    """
+    kafka_host = os.environ.get('KAFKA_HOST', "my-cluster-kafka-brokers")
+    kafka_port = os.environ.get('KAFKA_PORT', "9093")
+
+    if ':' not in kafka_host and kafka_port != "":
+        kafka_host += f":{kafka_port}"
+
+    return kafka_host
 
 
 def init_producer(bootstrap_servers: list):
@@ -91,30 +105,24 @@ def subscribe_topics(consumer: KafkaConsumer, topic_list: list):
         sys.exit(1)
 
 
-def topics_exists(consumer: KafkaConsumer, topic_list: list):
+def list_unavbl_topics(consumer: KafkaConsumer, topic_list: list):
     """ Verify if topics exist in Kafka Brooker.
+    Return list of topics which were not found.
     Arguments:
 
     Returns:
-
+    List of unavailiavle
     """
-    error_found = False
-
+    unavbl_topics = []
     for topic in topic_list:
-        # if topic not found by cosumer report it
         try:
             if topic not in consumer.topics():
-                add_to_log(f"Error: Topic '{topic}' does not exist.")
-                error_found = True
+                unavbl_topics.append(topic)
         except Exception as e:
             add_to_log(f"Error: Verifying if topic: '{topic}' exists failed message: '{e}'.")
             sys.exit(1)
 
-    if error_found:
-        return False
-    else:
-        add_to_log("Info: All topics exist.")
-        return True
+    return unavbl_topics
 
 
 def list_empty_topics(topic_latest_message_value_dict: dict):
