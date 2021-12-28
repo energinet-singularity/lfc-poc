@@ -13,7 +13,7 @@ import parm_general as PARM
 
 if __name__ == "__main__":
     print_lfc_logo()
-    add_to_log("Info: LFC demand response simulation initialization..")
+    add_to_log("Info: LFC P_demand response simulation initialization..")
 
     # Kafka brooker set from environment variables
     kafka_brooker = set_kafka_brooker_from_env()
@@ -46,7 +46,7 @@ if __name__ == "__main__":
     if list_unavbl_topics(consumer=consumer_kafka, topic_list=topics_list, print_err=True):
         sys.exit(1)
 
-    add_to_log("Info: Simulating LFC Demand response....")
+    add_to_log("Info: Simulating LFC P_demand response....")
     add_to_log("|-------------------------------------------------|")
 
     while True:
@@ -104,11 +104,12 @@ if __name__ == "__main__":
             sys.exit(1)
 
         add_to_log(f"Info: LFC P_target is: {current_lfc_p_target}")
-        add_to_log(f"Info: MW_diff is: {current_lfc_mw_diff}")
 
         # simulate PBR responce
         response_pbr = simulate_pbr_response(p_target=current_lfc_p_target,
                                              last_pbr_response=last_pbr_response)
+        add_to_log(f"Info: PBR response is: {response_pbr}")
+        add_to_log(f"Info: MW_diff is: {current_lfc_mw_diff}")
 
         # send current pbr repsonce to kafka topic
         produce_message(producer=producer_kafka,
@@ -119,7 +120,7 @@ if __name__ == "__main__":
         response_system = round(current_lfc_mw_diff+response_pbr, PARM.PRECISION_DECIMALS)
         produce_message(producer=producer_kafka, topic_name=tp_nm.lfc_p_dem,
                         value={msg_val_nm.lfc_p_dem: response_system})
-        add_to_log(f"Info: System response: {response_system} was send as new LFC demand")
+        add_to_log(f"Info: System response: {response_system} was send as new LFC P_demand")
 
         # add_to_log(f"Debug: Loop took: {round(time()-time_loop_start,3)} secounds.")
         add_to_log("|-------------------------------------------------|")

@@ -9,4 +9,4 @@ RUN pip3 install --upgrade pip && pip3 install -r requirements.txt --no-cache-di
 COPY app/* /app/
 
 # LAYER 4 / Run the application
-CMD ["python3", "-u", "/app/pbr_demand_respone_simulator.py"]
+CMD ["python3", "-u", "/app/simu_p_demand.py"]
