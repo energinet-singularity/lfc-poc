@@ -105,7 +105,7 @@ def subscribe_topics(consumer: KafkaConsumer, topic_list: list):
         sys.exit(1)
 
 
-def list_unavbl_topics(consumer: KafkaConsumer, topic_list: list):
+def list_unavbl_topics(consumer: KafkaConsumer, topic_list: list, print_err: bool):
     """ Verify if topics exist in Kafka Brooker.
     Return list of topics which were not found.
     Arguments:
@@ -122,10 +122,13 @@ def list_unavbl_topics(consumer: KafkaConsumer, topic_list: list):
             add_to_log(f"Error: Verifying if topic: '{topic}' exists failed message: '{e}'.")
             sys.exit(1)
 
+    if unavbl_topics:
+        add_to_log(f"Error: The Topic(s): {unavbl_topics} does not exist.")
+
     return unavbl_topics
 
 
-def list_empty_topics(topic_latest_message_value_dict: dict):
+def list_empty_topics(topic_latest_message_value_dict: dict, print_warn: bool):
     """
 
     """
@@ -133,6 +136,10 @@ def list_empty_topics(topic_latest_message_value_dict: dict):
     for topic in topic_latest_message_value_dict:
         if topic_latest_message_value_dict[topic] is None:
             empty_topics.append(topic)
+
+    if print_warn:
+        if empty_topics:
+            add_to_log(f"Warning: No data was availiable on consumed Kafka Topic(s): {empty_topics}.")
 
     return empty_topics
 
@@ -241,6 +248,23 @@ def seek_topic_partitions_latest(consumer: KafkaConsumer, topic_list: list):
     except Exception as e:
         add_to_log(f"Error: Seeking consumer: '{partition}' to offset: {offset} failed with message '{e}'.")
         sys.exit(1)
+
+
+def get_msg_val_from_dict(msg_val_dict: dict, tp_nm: str, msg_val_nm: str, default_val):
+    """
+    """
+    # TODO simplify/make smarter (Avro schema?)
+    # TODO error handling if message value name not found
+    # TODO add try/catch
+    if msg_val_dict[tp_nm] is None:
+        add_to_log(f"Warning: Value: {msg_val_nm} is not avialiable from topic: " +
+                   f"'{tp_nm}'. Setting to default value: '{default_val}'.")
+        msg_val = default_val
+    else:
+        # TODO build safety again wrongly formattet message
+        msg_val = msg_val_dict[tp_nm][msg_val_nm]
+
+    return msg_val
 
 
 def get_latest_topic_messages_to_dict_loop_based(consumer: KafkaConsumer, topic_list: list, timeout_ms: int):
