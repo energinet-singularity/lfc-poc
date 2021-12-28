@@ -103,8 +103,8 @@ if __name__ == "__main__":
             add_to_log(f"Error: Topic(s) '{topics_consumed_unavbl_msg}' does not contain any messages, but is needed.")
             sys.exit(1)
 
-        add_to_log(f"Info: Current target is: {current_lfc_p_target}")
-        add_to_log(f"Info: MW diff is: {current_lfc_mw_diff}")
+        add_to_log(f"Info: LFC P_target is: {current_lfc_p_target}")
+        add_to_log(f"Info: MW_diff is: {current_lfc_mw_diff}")
 
         # simulate PBR responce
         response_pbr = simulate_pbr_response(p_target=current_lfc_p_target,

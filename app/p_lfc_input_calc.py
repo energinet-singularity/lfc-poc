@@ -14,7 +14,7 @@ import parm_general as PARM
 
 if __name__ == "__main__":
     print_lfc_logo()
-    add_to_log("Info: LFC_P_Input calculation initialization..")
+    add_to_log("Info: LFC P_Input calculation initialization..")
 
     # Kafka brooker set from environment variables
     kafka_brooker = set_kafka_brooker_from_env()
