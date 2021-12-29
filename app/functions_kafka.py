@@ -250,7 +250,7 @@ def seek_topic_partitions_latest(consumer: KafkaConsumer, topic_list: list):
         sys.exit(1)
 
 
-def get_msg_val_from_dict(msg_val_dict: dict, tp_nm: str, msg_val_nm: str, default_val):
+def get_msg_val_from_dict(msg_val_dict: dict, tp_nm: str, msg_val_nm: str, default_val=None, precision=3):
     """
     """
     # TODO simplify/make smarter (Avro schema?)
@@ -263,6 +263,9 @@ def get_msg_val_from_dict(msg_val_dict: dict, tp_nm: str, msg_val_nm: str, defau
     else:
         # TODO build safety again wrongly formattet message
         msg_val = msg_val_dict[tp_nm][msg_val_nm]
+
+    if type(msg_val) == float:
+        msg_val = round(msg_val, precision)
 
     return msg_val
 

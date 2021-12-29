@@ -9,7 +9,10 @@ REFRESH_RATE_S_LFC_DEM_SIMU = 1
 PRECISION_DECIMALS = 2
 
 # lfc cycle time
-CYCLETIME_S_LFC_CONT = 4
+CYCLETIME_S_LFC = 4
+
+# LFC target value (always zero)
+SETPOINT_LFC_P_INPUT = 0
 
 # LFC controller settings (PID, deadband for controller to force error to zero)
 KP = 0.008
