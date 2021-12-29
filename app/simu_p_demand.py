@@ -2,14 +2,14 @@
 from time import sleep, time
 import sys
 
-# Importing function
+# Import functions
 from functions_kafka import (set_kafka_brooker_from_env, init_producer, init_consumer, init_topic_partitions,
                              subscribe_topics, produce_message,
                              get_latest_topic_messages_to_dict_poll_based, get_msg_val_from_dict,
                              list_unavbl_topics, list_empty_topics)
-from functions_lfc import (add_to_log, print_lfc_logo)
+from functions_lfc import (add_to_log)
 
-# Importing parameters, Kafka topic names and message value names
+# Import parameters, Kafka topic names and message value names
 import parm_kafka_topic_nm as tp_nm
 import parm_kafka_msg_val_nm as msg_val_nm
 import parm_general as PARM
@@ -45,7 +45,7 @@ def calc_simulated_pbr_response(p_target: float, last_pbr_response: float):
 
 
 if __name__ == "__main__":
-    print_lfc_logo()
+    # print_lfc_logo()
     add_to_log("Info: LFC p_demand response simulation initializing..")
 
     # Set Kafka brooker from environment variables

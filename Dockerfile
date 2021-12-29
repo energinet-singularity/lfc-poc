@@ -9,4 +9,4 @@ RUN pip3 install --upgrade pip && pip3 install -r requirements.txt --no-cache-di
 COPY app/* /app/
 
 # LAYER 4 / Run the application
-CMD ["python3", "-u", "/app/calc_p_target.py"]
+# CMD ["python3", "-u", "/app/calc_p_target.py"]

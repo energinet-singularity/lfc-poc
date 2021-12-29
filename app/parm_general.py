@@ -15,12 +15,12 @@ CYCLETIME_S_LFC = 4
 SETPOINT_LFC_P_INPUT = 0
 
 # LFC controller settings (PID, deadband for controller to force error to zero)
-KP = 0.008
-KI = 0.014
+KP = 0.01
+KI = 0.02
 KD = 0
 DEADBAND_LFC_ERROR = 0.5
 
 # pbr responce simu settings
-PBR_RAMP_MWM = 30
+PBR_RAMP_MWM = 50
 PBR_RAMP_MWS = PBR_RAMP_MWM/60
 DEADBAND_PBR_SIMU = PBR_RAMP_MWS*REFRESH_RATE_S_LFC_DEM_SIMU
