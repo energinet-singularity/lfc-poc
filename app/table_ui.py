@@ -95,6 +95,7 @@ if __name__ == "__main__":
                                                 precision=PARM.PRECISION_DECIMALS)
                 lfc_table.add_row([row["NAME"], msg_val, row["DESCP"]])
 
+        # display table
         print_lfc_logo_doh()
         add_to_log("")
         lfc_table.align = "l"
