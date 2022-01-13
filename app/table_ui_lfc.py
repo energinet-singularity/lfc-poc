@@ -31,9 +31,8 @@ if __name__ == "__main__":
     topic_latest_message_value_dict = {}
 
     # Initialize Kafka consumer
-    consumer_gp_nm = None
     consumer_kafka = init_consumer(bootstrap_servers=kafka_brooker,
-                                   group_id=consumer_gp_nm,
+                                   group_id=None,
                                    auto_offset_reset='earliest',
                                    enable_auto_commit=False)
 
@@ -67,8 +66,8 @@ if __name__ == "__main__":
                            "DESCP": "Simulated PBR response to P_Target"},
                           {"tp_nm": tp_nm.lfc_mw_diff,
                            "msg_val_nm": msg_val_nm.lfc_mw_diff,
-                           "NAME": "MW diff",
-                           "DESCP": "Difference between production and consumption."},
+                           "NAME": "MW difference",
+                           "DESCP": "Diffence between production and consumption"},
                           {"tp_nm": tp_nm.lfc_p_dem,
                            "msg_val_nm": msg_val_nm.lfc_p_dem,
                            "NAME": "P_Demand",

@@ -52,7 +52,7 @@ LL:::::::LL                  FF::::::FFFFFFFFF::::F       C:::::CCCCCCCC::::C
   L:::::L         LLLLLL       F:::::F                   C:::::C       CCCCCC
 LL:::::::LLLLLLLLL:::::L     FF:::::::FF                  C:::::CCCCCCCC::::C
 L::::::::::::::::::::::L     F::::::::FF                   CC:::::::::::::::C
- L::::::::::::::::::::::L     F::::::::FF                     CCC::::::::::::C
+L::::::::::::::::::::::L     F::::::::FF                     CCC::::::::::::C
 LLLLLLLLLLLLLLLLLLLLLLLL     FFFFFFFFFFF                        CCCCCCCCCCCCC
     """
     print(lfc_logo)

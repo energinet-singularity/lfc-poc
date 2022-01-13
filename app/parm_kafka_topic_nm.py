@@ -17,3 +17,7 @@ lfc_mw_diff = 'lfc-mw.diff.value'
 
 # pbr response simulated value
 lfc_pbr_response = 'lfc-pbr.response.value'
+
+# bsp activation
+lfc_bsp_lmol = "lfc-bsp.lmol.value"
+lfc_bsp_activated = "lfc-bsp.activated.value"

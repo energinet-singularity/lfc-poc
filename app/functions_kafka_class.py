@@ -4,9 +4,10 @@ import sys
 import os
 from functions_lfc import add_to_log
 
+
 class KafkaHelper:
     # TODO: verify inputs (ie. is a list)
-    def __init__(self, 
+    def __init__(self,
                  group_id,
                  auto_offset_reset='earliest',
                  enable_auto_commit=False,
@@ -37,6 +38,7 @@ class KafkaHelper:
         # not init on creation
         self.topic_latest_message_timestamp_dict = {}
         self.topic_latest_message_value_dict = {}
+        self.message_value = None
 
         # methods called on init
         self.set_kafka_brooker_from_env()
@@ -51,7 +53,7 @@ class KafkaHelper:
         self.init_topic_partitions_end_offsets_dict()
         self.init_topic_partitions_last_read_offset_dict()
 
-    # Method: 
+    # Method:
     def set_kafka_brooker_from_env(self):
         self.bootstrap_servers = os.environ.get('KAFKA_HOST', "my-cluster-kafka-brokers")
 
@@ -61,7 +63,7 @@ class KafkaHelper:
             self.consumer = KafkaConsumer(bootstrap_servers=self.bootstrap_servers,
                                           group_id=self.group_id,
                                           value_deserializer=lambda x: loads(x.decode('utf-8')),
-                                          auto_offset_reset= self.auto_offset_reset,
+                                          auto_offset_reset=self.auto_offset_reset,
                                           enable_auto_commit=self.enable_auto_commit)
             add_to_log("Info: Kafka consumer connection established.")
         except Exception as e:
@@ -114,7 +116,7 @@ class KafkaHelper:
             add_to_log(f"Error: The Topic(s): {self.unavbl_topics} does not exist.")
             sys.exit(1)
 
-    # Method: 
+    # Method:
     def list_empty_topics(self):
     # TODO rename?
     # TODO dict must be inint first? (report if not init)
@@ -259,6 +261,23 @@ class KafkaHelper:
             count_part = len(topic_partitions_not_reached_last_offset)
             if count_part == 0:
                 is_polling = False
+
+    # method: 
+    def get_msg_val_from_dict(self, tp_nm, msg_val_nm, default_val=None, precision=3):
+        # TODO simplify/make smarter (Avro schema?)
+        # TODO error handling if message value name not found
+        # TODO add try/catch
+        if self.topic_latest_message_value_dict[tp_nm] is None:
+            add_to_log(f"Warning: Value: {msg_val_nm} is not avialiable from topic: " +
+                    f"'{tp_nm}'. Setting to default value: '{default_val}'.")
+            self.message_value = default_val
+        else:
+            # TODO build safety again wrongly formattet message
+            self.message_value = self.topic_latest_message_value_dict[tp_nm][msg_val_nm]
+
+        if type(self.message_value) == float:
+            self.message_value = round(self.message_value, precision)
+
 
     def produce_message(self, topic_name, msg_value):
         # TODO verify if topic name is in producer list?
