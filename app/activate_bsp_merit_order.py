@@ -10,18 +10,14 @@ import parm_kafka_topic_nm as tp_nm
 import parm_kafka_msg_val_nm as msg_val_nm
 import parm_general as PARM
 
-""" 
+"""
 TODO:
-This module:
-- Run via docker compose
 - Load bid list from Kafka (when lmol parser done)
-
-Module "lmol_parser"
-- Load bid list from file to Kafka (MOL)
-
-Module ui for bud visning (se papir)
-
-PBR simulering laves så der er en for hver BSP
+- Split main i moduler
+- Run via docker compose
+- Dokumenter classes ordentligt
+- PBR simulering laves så der er en for hver BSP
+- Lav kafka topics som env vars
 
 """
 
@@ -58,6 +54,7 @@ lmol_bids = [
     }
 ]
 
+
 # BSP class blueprint
 class BSP:
     # init/constructor
@@ -65,14 +62,16 @@ class BSP:
         # attributes
         self.bsp_mrid = bsp_mrid
         self.setpoint = 0
-    
+
     # methods
     # - set setpint
     def set_setpoint(self, setpoint):
-        self.setpoint = round(setpoint,PARM.PRECISION_DECIMALS)
+        self.setpoint = round(setpoint, PARM.PRECISION_DECIMALS)
+
     # - set setpint
     def add_to_setpoint(self, setpoint):
-        self.setpoint += round(setpoint,PARM.PRECISION_DECIMALS)
+        self.setpoint += round(setpoint, PARM.PRECISION_DECIMALS)
+
 
 # Bid class blueprint
 class Bid:
@@ -88,12 +87,12 @@ class Bid:
         self.capacity_down = capacity_down
         self.activated = False
         self.availiable = True
-    
+
     # methods
     # - activate bid
     def activate_bid(self):
-        self.activated = True    
-        
+        self.activated = True
+
     # - deactivate bid
     def deactivate_bid(self):
         self.activated = False
@@ -101,7 +100,7 @@ class Bid:
 
 last_p_target = None
 
-if __name__ == "__main__": 
+if __name__ == "__main__":
 
     # Create lists of topic names produced to and consumed from
     topics_produced_list = [tp_nm.lfc_bsp_activated]
@@ -134,7 +133,7 @@ if __name__ == "__main__":
         # add_to_log(f"Debug: Getting messages took: {round(time()-time_loop_start,3)} secounds.")
 
         # get p_target value
-        # TODO (byd denne ind i class, men hvordan smartest? skal ikke poll hver gang med må gerne trigge poll? evt. kun på topic som skal have data frem for at polle alle consumed?)
+        # TODO skal ikke poll hver gang med må gerne trigge poll? evt. kun på topic som skal have data frem for at polle alle?
         # TODO return via method i stedet for attribute på class?
         kafka_obj.get_msg_val_from_dict(tp_nm=tp_nm.lfc_p_target,
                                         msg_val_nm=msg_val_nm.lfc_p_target,
@@ -147,6 +146,7 @@ if __name__ == "__main__":
             last_p_target = p_target
 
             # make list of bids based on lmol (local merit order list) and make list of BSP's
+            # TODO make function
             bid_list = []
             bsp_list = []
             for bid in lmol_bids:
@@ -163,6 +163,7 @@ if __name__ == "__main__":
                     bsp_list.append(BSP(bsp_mrid=bid["bsp_mrid"]))
 
             # sort bids by either up or down prices dependent on lfc regulation need defined by target
+            # TODO make as function
             reg_up = False
             reg_down = False
             if p_target > 0:
@@ -179,6 +180,7 @@ if __name__ == "__main__":
                 add_to_log(f"Info: No regulation needed. Target is {p_target}.")
 
             # mark necessary bids as activated
+            # TODO make as function
             if reg_up or reg_down:
                 availiable_regulation = 0
                 remaning_regulation = round(abs(p_target), PARM.PRECISION_DECIMALS)
@@ -211,6 +213,7 @@ if __name__ == "__main__":
             for bsp in bsp_list:
                 add_to_log(f"Info: Setpoint set to: {bsp.setpoint} for '{bsp.bsp_mrid}'")
 
-            kafka_obj.produce_message(topic_name=tp_nm.lfc_bsp_activated, msg_value={msg_val_nm.lfc_bsp_activated: [bsp.__dict__ for bsp in bsp_list]})
+            kafka_obj.produce_message(topic_name=tp_nm.lfc_bsp_activated,
+                                      msg_value={msg_val_nm.lfc_bsp_activated: [bsp.__dict__ for bsp in bsp_list]})
 
             add_to_log(f"Debug: BSP activation done in: {round(time()-time_loop_start,3)} secounds.")

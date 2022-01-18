@@ -133,3 +133,6 @@ test_signal_gen.ipynb
 
 # docker compose
 docker-compose.yaml
+
+# data for lmol parser
+data/

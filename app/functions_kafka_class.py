@@ -6,9 +6,22 @@ from functions_lfc import add_to_log
 
 
 class KafkaHelper:
+    """
+    Handles communication with Kafka in terms of both producing and consuming messages.
+
+    Attributes
+    ----------
+    group id : str, optional
+        kafka consumer group id used to keep track of consumed message offset (default is None)
+    auto_offset_reser : str, optional
+        kafka auto offset reset, which can be set to latest or earliest (default is earliest)
+    enable_auto_commit : boolen, optional
+        ???
+
+    """
     # TODO: verify inputs (ie. is a list)
     def __init__(self,
-                 group_id,
+                 group_id=None,
                  auto_offset_reset='earliest',
                  enable_auto_commit=False,
                  topics_consumed_list=[],
@@ -43,9 +56,13 @@ class KafkaHelper:
         # methods called on init
         self.set_kafka_brooker_from_env()
         # TODO only init if consumed and produced topics
+        # TODO warning if no topics at all?
         self.init_consumer()
-        self.init_producer()
-        self.subscribe_topics()
+        if topics_consumed_list:
+            self.subscribe_topics()
+        if topics_produced_list:
+            self.init_producer()
+        # always
         self.list_unavbl_topics()
         self.init_topic_partitions()
         self.init_topic_partitions_dict()
@@ -79,14 +96,15 @@ class KafkaHelper:
         except Exception as e:
             add_to_log(f"Error: Kafka producer connection failed with message: '{e}'.")
             sys.exit(1)
-    
+
     # Method: Subscribes consumer to topics
     def subscribe_topics(self):
         try:
             self.consumer.subscribe(self.topics_consumed_list)
             add_to_log(f"Info: Kafka consumer subscribed to topics: '{self.topics_consumed_list}'.")
         except Exception as e:
-            add_to_log(f"Error: Kafka consumer subscribtion to topics: '{self.topics_consumed_list}' failed with message: '{e}'.")
+            add_to_log(f"Error: Kafka consumer subscribtion to topics: '{self.topics_consumed_list}' " +
+                       f"failed with message: '{e}'.")
             sys.exit(1)
 
     # Method: Dummy Poll, which is needed to force assignment of partitions after subsribtion to topics.
@@ -109,7 +127,7 @@ class KafkaHelper:
                 if topic not in self.consumer.topics():
                     self.unavbl_topics.append(topic)
             except Exception as e:
-                add_to_log(f"Error: Verifying if topic: '{topic}' exists failed message: '{e}'.")
+                add_to_log(f"Error: Verifying if topic: '{topic}' exists failed with message: '{e}'.")
                 sys.exit(1)
 
         if self.unavbl_topics:
@@ -117,16 +135,16 @@ class KafkaHelper:
             sys.exit(1)
 
     # Method:
-    def list_empty_topics(self):
     # TODO rename?
     # TODO dict must be inint first? (report if not init)
+    def list_empty_topics(self):
         empty_topics = []
         for topic in self.topic_latest_message_value_dict:
             if self.topic_latest_message_value_dict[topic] is None:
                 empty_topics.append(topic)
             if empty_topics:
                 add_to_log(f"Warning: No data was availiable on consumed Kafka Topic(s): {empty_topics}.")
-    
+
     # Method Create a dictionary with partions avlaiable for each topic.
     def init_topic_partitions_dict(self):
         if type(self.topic_list) != list:
@@ -136,9 +154,11 @@ class KafkaHelper:
         self.topic_partitions_dict = {}
         try:
             for topic in self.topic_list:
-                self.topic_partitions_dict[topic] = [TopicPartition(topic, p) for p in self.consumer.partitions_for_topic(topic)]
+                self.topic_partitions_dict[topic] = [TopicPartition(topic, p)
+                                                     for p in self.consumer.partitions_for_topic(topic)]
         except Exception as e:
-            add_to_log(f"Error: Making dictionary of lists for topic partitions for topic: '{topic}' failed with message: '{e}'.")
+            add_to_log(f"Error: Making dictionary of lists for topic partitions for topic: '{topic}' " +
+                       f"failed with message: '{e}'.")
             sys.exit(1)
 
     # Method: Create a dictionary with topic partion --> begin offsets
@@ -147,24 +167,22 @@ class KafkaHelper:
 
         try:
             for topic in self.topic_list:
-                self.begin_offset_topic_partitions_dict[topic] = self.consumer.beginning_offsets([TopicPartition(topic, p)
-                                                                 for p in self.consumer.partitions_for_topic(topic)])
+                self.begin_offset_topic_partitions_dict[topic] = self.consumer.beginning_offsets([TopicPartition(topic, p) for p in self.consumer.partitions_for_topic(topic)])
         except Exception as e:
             add_to_log(f"Error: Getting latest offset for partitions for topic: '{topic}' failed with message '{e}'.")
             sys.exit(1)
 
-     # Method: Create a dictionary with topic partion --> end offsets
+    # Method: Create a dictionary with topic partion --> end offsets
     def init_topic_partitions_end_offsets_dict(self):
         self.end_offset_topic_partitions_dict = {}
         try:
             for topic in self.topic_list:
-                self.end_offset_topic_partitions_dict[topic] = self.consumer.end_offsets([TopicPartition(topic, p)
-                                                               for p in self.consumer.partitions_for_topic(topic)])
+                self.end_offset_topic_partitions_dict[topic] = self.consumer.end_offsets([TopicPartition(topic, p) for p in self.consumer.partitions_for_topic(topic)])
         except Exception as e:
             add_to_log(f"Error: Getting end offset for partitions for topic: '{topic}' failed with message: '{e}'.")
             sys.exit(1)
 
-    # Method: 
+    # Method:
     def init_topic_partitions_last_read_offset_dict(self):
 
         # TODO calling init again?
@@ -178,14 +196,13 @@ class KafkaHelper:
                 if begin_offset != 0:
                     self.last_read_offset_topic_partition[topic][topic_partition] = begin_offset-1
 
-    # Method: 
+    # Method:
     def init_topic_latest_msg_dicts(self):
         self.topic_latest_message_timestamp_dict = {}
         self.topic_latest_message_value_dict = {}
         for topic in self.topics_consumed_list:
             self.topic_latest_message_timestamp_dict[topic] = 0
             self.topic_latest_message_value_dict[topic] = None
-
 
     # Method: Seek partitions to latest availiable message
     def seek_topic_partitions_latest(self):
@@ -214,7 +231,6 @@ class KafkaHelper:
         # init dictionary with Topic -> TopicPartitions
         # TODO reinint every time?
         self.init_topic_partitions_dict()
-        
 
         # init dictionary with Topic,TopicPartition -> begin_offset-1 unless 0 (used for tracking last read offset)
         # TODO verify if this works for empty topic
@@ -262,14 +278,14 @@ class KafkaHelper:
             if count_part == 0:
                 is_polling = False
 
-    # method: 
+    # method:
     def get_msg_val_from_dict(self, tp_nm, msg_val_nm, default_val=None, precision=3):
         # TODO simplify/make smarter (Avro schema?)
         # TODO error handling if message value name not found
         # TODO add try/catch
         if self.topic_latest_message_value_dict[tp_nm] is None:
             add_to_log(f"Warning: Value: {msg_val_nm} is not avialiable from topic: " +
-                    f"'{tp_nm}'. Setting to default value: '{default_val}'.")
+                       f"'{tp_nm}'. Setting to default value: '{default_val}'.")
             self.message_value = default_val
         else:
             # TODO build safety again wrongly formattet message
@@ -277,7 +293,6 @@ class KafkaHelper:
 
         if type(self.message_value) == float:
             self.message_value = round(self.message_value, precision)
-
 
     def produce_message(self, topic_name, msg_value):
         # TODO verify if topic name is in producer list?
@@ -310,6 +325,7 @@ def get_msg_val_from_dict(msg_val_dict: dict, tp_nm: str, msg_val_nm: str, defau
 
 
 """
+# TODO: add this funtion to class
 def get_latest_topic_messages_to_dict_loop_based(consumer: KafkaConsumer, topic_list: list, timeout_ms: int):
     # Get latest message value per topic and return it in dictionary - using consumer loop
 
@@ -360,9 +376,3 @@ def get_latest_topic_messages_to_dict_loop_based(consumer: KafkaConsumer, topic_
     return topic_latest_message_value_dict
 
 """
-
-
-
-
-
-

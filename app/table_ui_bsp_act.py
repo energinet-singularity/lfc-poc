@@ -1,11 +1,10 @@
 # Import depedencies
 from prettytable import PrettyTable
 from time import sleep, time
-import sys
 
 # Import functions
 from functions_kafka_class import KafkaHelper
-from functions_lfc import add_to_log
+from functions_lfc import add_to_log, print_bsp_logo_doh
 
 # Import parameters, Kafka topic names and message value names
 import parm_kafka_topic_nm as tp_nm
@@ -49,13 +48,13 @@ if __name__ == "__main__":
 
         # Fill table
         for key in data:
-            #print(key)
             bsp_table.add_row([key["bsp_mrid"], key["setpoint"]])
-        
+
         # display table
-        # print_lfc_logo_doh()
+        print_bsp_logo_doh()
         add_to_log("")
         bsp_table.align = "l"
         bsp_table.junction_char
         print(bsp_table)
+        print("\n\n\n")
         sleep(1)
