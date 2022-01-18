@@ -13,8 +13,7 @@ import parm_kafka_msg_val_nm as msg_val_nm
 import parm_general as PARM
 
 bid_table = PrettyTable()
-bid_table.field_names = ["mrid_bsp", "mrid_bid", "name", "direction", "price", "availiable"]
-print(type(bid_table.field_names))
+bid_table.field_names = ["mrid_bsp", "mrid_bid", "name", "direction", "price", "capacity", "availiable"]
 
 if __name__ == "__main__":
 
@@ -50,11 +49,11 @@ if __name__ == "__main__":
         data.sort(key=lambda x: (x['direction'], x['price']), reverse=False)
 
         # Fill table
-        for key in data:
-            #print(key)
-            #print(type([key["mrid_bsp"], key["mrid_bid"], key["name"], key["direction"], key["price"], key["availiable"]]))
+        for bid in data:
+            #print(type([bid["mrid_bsp"], bid["mrid_bid"], bid["name"], bid["direction"], bid["price"], bid["availiable"]]))
             # TODO loop list og lav table der ud fra
-            bid_table.add_row([key["mrid_bsp"], key["mrid_bid"], key["name"], key["direction"], key["price"], key["availiable"]])
+            bid_table.add_row([bid["mrid_bsp"], bid["mrid_bid"], bid["name"], bid["direction"], bid["price"], bid["capacity"], bid["availiable"]])
+            # bid_table.add_row([bid["mrid_bsp"], bid["mrid_bid"], bid["name"], bid["direction"], bid["price"], bid["availiable"]])
 
         # display table
         print_bid_logo_doh()

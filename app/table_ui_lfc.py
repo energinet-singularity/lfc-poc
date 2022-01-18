@@ -90,7 +90,7 @@ if __name__ == "__main__":
                 msg_val = get_msg_val_from_dict(msg_val_dict=topic_latest_message_value_dict,
                                                 tp_nm=row["tp_nm"],
                                                 msg_val_nm=row["msg_val_nm"],
-                                                default_val="NaN",
+                                                default_val="NA",
                                                 precision=PARM.PRECISION_DECIMALS)
                 lfc_table.add_row([row["NAME"], msg_val, row["DESCP"]])
 
