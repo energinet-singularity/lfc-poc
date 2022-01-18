@@ -13,12 +13,14 @@ import parm_general as PARM
 
 """
 TODO:
-- kombiner table for bsp og bid act
+- omdøb filer til calc_(bsp_mol_activation) parse_lmol og simu_?
 - Split main i moduler
 - Run via docker compose (alle pånær lmol parser, da det kræver fil mount)
 - Dokumenter classes ordentligt
-- PBR simulering laves så der er en for hver BSP
+- BSP simulering skal tage sum af setpoints frem for P_target
+- PBR simulering laves så der er en for hver BSP 
 - Lav kafka topics som env vars
+- LAv table ui som message loops?
 
 """
 
@@ -65,6 +67,7 @@ class Bid:
 
 
 last_p_target = None
+last_lmol = 0
 
 if __name__ == "__main__":
 
@@ -113,10 +116,11 @@ if __name__ == "__main__":
         lmol = loads(kafka_obj.message_value)
         lmol.sort(key=lambda x: (x['direction'], x['price']), reverse=False)
 
-        # calculate BSP activation of bids if p_target has changed
-        if last_p_target != p_target:
+        # calculate BSP activation of bids if p_target or bid has changed
+        if last_p_target != p_target or last_lmol != lmol:
 
             last_p_target = p_target
+            last_lmol = lmol
 
             # make list of bids based on lmol (local merit order list) and make list of BSP's
             # TODO make function

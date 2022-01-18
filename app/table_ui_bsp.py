@@ -49,8 +49,8 @@ if __name__ == "__main__":
                                         msg_val_nm=msg_val_nm.lfc_bsp_lmol)
 
         data = loads(kafka_obj.message_value)
-        data.sort(key=lambda x: (x['direction'], x['price']), reverse=False)
-
+        data.sort(key=lambda x: (x['direction'], float(x['price'])), reverse=False)
+        
         # Fill table with bids
         for bid in data:
             # TODO loop list og lav table der ud fra
@@ -72,7 +72,7 @@ if __name__ == "__main__":
         print_bid_logo_doh()
         bid_table.align = "l"
         bid_table.junction_char
-        print("- Avaliable bids from LMOL -")
+        add_to_log("- Avaliable bids from LMOL -")
         print(bid_table)
 
         bsp_table.align = "l"

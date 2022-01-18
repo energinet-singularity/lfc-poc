@@ -13,7 +13,9 @@ import parm_kafka_topic_nm as tp_nm
 import parm_kafka_msg_val_nm as msg_val_nm
 
 xml_last_modified = 0
-xml_filepath = "data/" + "lmol.xml"
+# TODO do not use relative path
+xml_filepath = "data/lmol.xml"
+
 
 if __name__ == "__main__":
 
