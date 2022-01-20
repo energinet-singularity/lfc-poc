@@ -50,11 +50,17 @@ if __name__ == "__main__":
 
         data = loads(kafka_obj.message_value)
         data.sort(key=lambda x: (x['direction'], float(x['price'])), reverse=False)
-        
+
         # Fill table with bids
         for bid in data:
             # TODO loop list og lav table der ud fra
-            bid_table.add_row([bid["mrid_bsp"], bid["mrid_bid"], bid["name"], bid["direction"], bid["price"], bid["capacity"], bid["availiable"]])
+            bid_table.add_row([bid["mrid_bsp"],
+                              bid["mrid_bid"],
+                              bid["name"],
+                              bid["direction"],
+                              bid["price"],
+                              bid["capacity"],
+                              bid["availiable"]])
 
         # get values for activated bsp's
         kafka_obj.get_msg_val_from_dict(tp_nm=tp_nm.lfc_bsp_activated,
@@ -68,7 +74,7 @@ if __name__ == "__main__":
             bsp_table.add_row([key["mrid"], key["setpoint"]])
 
         # display tables
-        #add_to_log("")
+        # add_to_log("")
         print_bid_logo_doh()
         bid_table.align = "l"
         bid_table.junction_char

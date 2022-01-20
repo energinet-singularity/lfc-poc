@@ -82,6 +82,7 @@ BBBBBBBBBBBBBBBBB         SSSSSSSSSSSSSSS        PPPPPPPPPP
     """
     print(logo)
 
+
 def print_bid_logo_doh():
     """
     Prints a ASCII-art BID logo to terminal.

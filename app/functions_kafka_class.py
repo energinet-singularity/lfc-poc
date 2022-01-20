@@ -19,6 +19,7 @@ class KafkaHelper:
         ???
 
     """
+    # TODO: will not work if group id are used by multiple, how to check?
     # TODO: verify inputs (ie. is a list)
     def __init__(self,
                  group_id=None,
@@ -27,7 +28,8 @@ class KafkaHelper:
                  topics_consumed_list=[],
                  topics_produced_list=[],
                  poll_timeout_ms=100):
-        # attributes set on object init
+
+        # attributes set on object instansiation, either bt default or supplied values.
         self.group_id = group_id
         self.auto_offset_reset = auto_offset_reset
         self.enable_auto_commit = enable_auto_commit
@@ -36,9 +38,11 @@ class KafkaHelper:
         self.topic_list = list(set(self.topics_produced_list + self.topics_consumed_list))
         self.poll_timeout_ms = poll_timeout_ms
 
-        # attributes
-        # TODO split in init and uninit
-        # init by methods on creation
+        # not init on creation
+        self.topic_latest_message_timestamp_dict = {}
+        self.topic_latest_message_value_dict = {}
+
+        # attributes init by methods on creation
         self.bootstrap_servers = None
         self.consumer = None
         self.producer = None
@@ -48,10 +52,7 @@ class KafkaHelper:
         self.end_offset_topic_partitions_dict = {}
         self.last_read_offset_topic_partitions_dict = {}
 
-        # not init on creation
-        self.topic_latest_message_timestamp_dict = {}
-        self.topic_latest_message_value_dict = {}
-        self.message_value = None
+
 
         # methods called on init
         self.set_kafka_brooker_from_env()
@@ -70,9 +71,9 @@ class KafkaHelper:
         self.init_topic_partitions_end_offsets_dict()
         self.init_topic_partitions_last_read_offset_dict()
 
-    # Method:
+    # Method: set kafka brooker from ENV or default to value
     def set_kafka_brooker_from_env(self):
-        self.bootstrap_servers = os.environ.get('KAFKA_HOST', "my-cluster-kafka-brokers")
+        self.bootstrap_servers = os.environ.get('KAFKA_HOST', "my-cluster-kafka-bootstrap.kafka")
 
     # Method: Initializes Kafka comsumer, consuming from beginning af partitions.
     def init_consumer(self):
@@ -144,6 +145,7 @@ class KafkaHelper:
                 empty_topics.append(topic)
             if empty_topics:
                 add_to_log(f"Warning: No data was availiable on consumed Kafka Topic(s): {empty_topics}.")
+        return empty_topics
 
     # Method Create a dictionary with partions avlaiable for each topic.
     def init_topic_partitions_dict(self):
@@ -226,6 +228,7 @@ class KafkaHelper:
 
     # Method: Get latest message value per topic and return it in dictionary - using .poll
     def get_latest_topic_messages_to_dict_poll_based(self):
+        # TODO doc and mention the dictionarys it updates
         # TODO modify this to include timeout for max time spend on polls?
 
         # init dictionary with Topic -> TopicPartitions
@@ -279,6 +282,7 @@ class KafkaHelper:
                 is_polling = False
 
     # method:
+    """
     def get_msg_val_from_dict(self, tp_nm, msg_val_nm, default_val=None, precision=3):
         # TODO simplify/make smarter (Avro schema?)
         # TODO error handling if message value name not found
@@ -286,15 +290,59 @@ class KafkaHelper:
         if self.topic_latest_message_value_dict[tp_nm] is None:
             add_to_log(f"Warning: Value: {msg_val_nm} is not avialiable from topic: " +
                        f"'{tp_nm}'. Setting to default value: '{default_val}'.")
-            self.message_value = default_val
+            message_value = default_val
         else:
             # TODO build safety again wrongly formattet message
-            self.message_value = self.topic_latest_message_value_dict[tp_nm][msg_val_nm]
+            message_value = self.topic_latest_message_value_dict[tp_nm][msg_val_nm]
 
-        if type(self.message_value) == float:
-            self.message_value = round(self.message_value, precision)
+        if type(message_value) == float:
+            message_value = round(message_value, precision)
+        
+        return message_value
+    """
+
+    def get_latest_msg_from_topic(self, topic_name):
+        # new
+        # TODO doc it and move it
+
+        self.get_latest_topic_messages_to_dict_poll_based()
+
+        if self.topic_latest_message_value_dict[topic_name] is None:
+            add_to_log("Error: Message is not avialiable from topic: '{topic_name}'")
+            sys.exit(1)
+        else:
+            message = self.topic_latest_message_value_dict[topic_name]
+
+        return message
+
+    def get_latest_msg_val_from_topic(self, topic_name, msg_val_name, default_msg_val=None, precision=3):
+        # TODO doc
+        self.get_latest_topic_messages_to_dict_poll_based()
+
+        if self.topic_latest_message_value_dict[topic_name][msg_val_name] is None:
+            add_to_log(f"Warning: Value: {msg_val_name} is not avialiable from topic: " +
+                       f"'{topic_name}'. Setting to default value: '{default_msg_val}'.")
+            message_value = default_msg_val
+        else:
+            message_value = self.topic_latest_message_value_dict[topic_name][msg_val_name]
+
+        if type(message_value) == float:
+            message_value = round(message_value, precision)
+
+        return message_value
+
+    def get_latest_msg_from_consumed_topics_to_dict(self):
+        # TODO doc (gets latest messages from consumed toics and returnes the in dictionary)
+        self.get_latest_topic_messages_to_dict_poll_based()
+
+        # TODO report empty topics?
+        self.list_empty_topics()
+
+        return self.topic_latest_message_value_dict
+
 
     def produce_message(self, topic_name, msg_value):
+        # TODO doc
         # TODO verify if topic name is in producer list?
         try:
             self.producer.send(topic_name, value=msg_value)
@@ -302,26 +350,6 @@ class KafkaHelper:
         except Exception as e:
             add_to_log(f"Error: Sending message to Kafka failed with message: '{e}'.")
             sys.exit(1)
-
-
-def get_msg_val_from_dict(msg_val_dict: dict, tp_nm: str, msg_val_nm: str, default_val=None, precision=3):
-    """
-    """
-    # TODO simplify/make smarter (Avro schema?)
-    # TODO error handling if message value name not found
-    # TODO add try/catch
-    if msg_val_dict[tp_nm] is None:
-        add_to_log(f"Warning: Value: {msg_val_nm} is not avialiable from topic: " +
-                   f"'{tp_nm}'. Setting to default value: '{default_val}'.")
-        msg_val = default_val
-    else:
-        # TODO build safety again wrongly formattet message
-        msg_val = msg_val_dict[tp_nm][msg_val_nm]
-
-    if type(msg_val) == float:
-        msg_val = round(msg_val, precision)
-
-    return msg_val
 
 
 """
