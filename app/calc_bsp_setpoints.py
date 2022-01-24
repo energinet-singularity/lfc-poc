@@ -13,16 +13,15 @@ import parm_general as PARM
 
 """
 TODO:
-- Dokumenter classes ordentligt
 - BSP simulering skal tage sum af setpoints frem for P_target
-- brug kafka helper alle steder
 - lav en samlet table ui?
+- Dokumenter classes ordentligt
+- brug kafka helper alle steder
 - brug non root user i dockerfile som vku
 - PBR simulering laves så der er en for hver BSP?
 - Lav kafka topics som env vars
 - Lav table ui som message loops?
 - LMOL via file mount?
-- loop based consumer også
 """
 
 
@@ -196,18 +195,15 @@ if __name__ == "__main__":
     add_to_log("|-----------------------------------------|")
 
     while True:
-        # TODO is sleep needed?
+        # refresh rate
         sleep(0.1)
 
         # time of loop start
         time_loop_start = time()
 
-        # Report warnings on empty topics ?
-        kafka_obj.list_empty_topics()
-
         # get latest messages from consumed topics
         msg_val_dict = kafka_obj.get_latest_msg_from_consumed_topics_to_dict()
-        #add_to_log(f"Debug: Getting messages took: {round(time()-time_loop_start,3)} secounds.")
+        # add_to_log(f"Debug: Getting messages took: {round(time()-time_loop_start,3)} secounds.")
 
         # Get p target
         p_target = msg_val_dict[tp_nm.lfc_p_target][msg_val_nm.lfc_p_target]
