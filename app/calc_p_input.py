@@ -43,13 +43,21 @@ if __name__ == "__main__":
         # add_to_log(f"Debug: Getting messages took: {round(time()-time_loop_start,3)} secounds.")
 
         # TODO check possibility/need for default value and rounding
+        # TODO check if values that are only consumed are availiable, if not then wait until they are
         current_lfc_p_corr = msg_val_dict[tp_nm.lfc_p_corr][msg_val_nm.lfc_p_corr]
         current_lfc_p_dem = msg_val_dict[tp_nm.lfc_p_dem][msg_val_nm.lfc_p_dem]
+        
         last_lfc_p_corr = msg_val_dict[tp_nm.lfc_p_input_calc_state][msg_val_nm.last_lfc_p_corr]
+        if last_lfc_p_corr is None: last_lfc_p_corr = 0
+        
         last_lfc_p_dem = msg_val_dict[tp_nm.lfc_p_input_calc_state][msg_val_nm.last_lfc_p_dem]
+        if last_lfc_p_dem is None: last_lfc_p_dem = 0
 
         # Calculate new LFC input and send to Kafka if:
         # LFC demand changed, LFC correction changed or it is first loop af function
+
+        # TODO build event based/if not avaliable then loop until they are something
+
         if last_lfc_p_dem != current_lfc_p_dem or last_lfc_p_corr != current_lfc_p_corr or is_first_loop:
 
             # Log if demand changed or remained the same

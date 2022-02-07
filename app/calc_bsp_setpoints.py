@@ -13,7 +13,7 @@ import parm_general as PARM
 
 """
 TODO:
-- BSP simulering skal tage sum af setpoints frem for P_target
+- BSP simulering skal tage sum af setpoints frem for P_target (eller hverfald noget sum af loop hastigheder?)
 - lav en samlet table ui?
 - Dokumenter classes ordentligt
 - brug kafka helper alle steder
@@ -150,7 +150,7 @@ class LMOLHandler():
             remaning_regulation = round(abs(self.p_target), PARM.PRECISION_DECIMALS)
             for bid in self.bid_candidates:
 
-                add_to_log(f"Info: BSP bid '{bid.mrid_bid}' from {bid.name} neeeded.")
+                # add_to_log(f"Info: BSP bid '{bid.mrid_bid}' from {bid.name} neeeded.")
                 bid.activate_bid()
 
                 availiable_regulation += bid.capacity
@@ -176,7 +176,7 @@ if __name__ == "__main__":
 
     # init
     last_p_target = None
-    last_lmol = 0
+    last_lmol = None
 
     # Create lists of topic names produced to and consumed from
     topics_produced_list = [tp_nm.lfc_bsp_activated]
@@ -191,7 +191,7 @@ if __name__ == "__main__":
                             topics_produced_list=topics_produced_list,
                             poll_timeout_ms=PARM.TIMEOUT_MS_POLL)
 
-    add_to_log("Activating BSP in merit order baes on LMOL and P_target..")
+    add_to_log("Activating BSP in merit order based on LMOL and P_target..")
     add_to_log("|-----------------------------------------|")
 
     while True:
@@ -205,27 +205,35 @@ if __name__ == "__main__":
         msg_val_dict = kafka_obj.get_latest_msg_from_consumed_topics_to_dict()
         # add_to_log(f"Debug: Getting messages took: {round(time()-time_loop_start,3)} secounds.")
 
-        # Get p target
-        p_target = msg_val_dict[tp_nm.lfc_p_target][msg_val_nm.lfc_p_target]
+        # check if values are missing
+        if None in msg_val_dict.values():
+            add_to_log("Warning: Missing inputdata, BSP activation paused.")
 
-        # get lmol and sort
-        lmol = loads(msg_val_dict[tp_nm.lfc_bsp_lmol][msg_val_nm.lfc_bsp_lmol])
-        lmol.sort(key=lambda x: (x['direction'], x['price']), reverse=False)
+        else:
+            # Get p target
+            p_target = msg_val_dict[tp_nm.lfc_p_target][msg_val_nm.lfc_p_target]
 
-        # calculate BSP activation of bids if p_target or bid has changed
-        if last_p_target != p_target or last_lmol != lmol:
+            # get lmol and sort
+            lmol_data = msg_val_dict[tp_nm.lfc_bsp_lmol][msg_val_nm.lfc_bsp_lmol]
 
-            last_p_target = p_target
-            last_lmol = lmol
+            # sort lmol
+            lmol = loads(lmol_data)
+            lmol.sort(key=lambda x: (x['direction'], x['price']), reverse=False)
 
-            lmol_obj = LMOLHandler(lmol=lmol, p_target=p_target)
+            # calculate BSP activation of bids if p_target or bid has changed
+            if last_p_target != p_target or last_lmol != lmol:
 
-            bsp_setpoint_list = lmol_obj.bsp_func()
+                last_p_target = p_target
+                last_lmol = lmol
 
-            for bsp in bsp_setpoint_list:
-                add_to_log(f"Info: Setpoint set to: {bsp.setpoint} for '{bsp.mrid}'")
+                lmol_obj = LMOLHandler(lmol=lmol, p_target=p_target)
 
-            kafka_obj.produce_message(topic_name=tp_nm.lfc_bsp_activated,
-                                      msg_value={msg_val_nm.lfc_bsp_activated: [bsp.__dict__ for bsp in bsp_setpoint_list]})
+                bsp_setpoint_list = lmol_obj.bsp_func()
 
-            add_to_log(f"Debug: BSP activation done in: {round(time()-time_loop_start,3)} secounds.")
+                # for bsp in bsp_setpoint_list:
+                    # add_to_log(f"Info: Setpoint set to: {bsp.setpoint} for '{bsp.mrid}'")
+
+                kafka_obj.produce_message(topic_name=tp_nm.lfc_bsp_activated,
+                                        msg_value={msg_val_nm.lfc_bsp_activated: [bsp.__dict__ for bsp in bsp_setpoint_list]})
+
+                add_to_log(f"Debug: BSP activation done in: {round(time()-time_loop_start,3)} secounds.")

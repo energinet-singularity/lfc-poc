@@ -94,7 +94,7 @@ if __name__ == "__main__":
         current_lfc_p_input = get_msg_val_from_dict(msg_val_dict=topic_latest_message_value_dict,
                                                     tp_nm=tp_nm.lfc_p_input,
                                                     msg_val_nm=msg_val_nm.lfc_p_input,
-                                                    default_val=None,
+                                                    default_val=0,
                                                     precision=PARM.PRECISION_DECIMALS)
 
         # - last_error (consumed and produced, default val: 0)

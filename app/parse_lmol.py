@@ -32,9 +32,23 @@ if __name__ == "__main__":
 
         if xml_last_modified != xml_modified:
             add_to_log(f"Info: Reading bid list from: '{xml_filepath}''.")
+            
+            """ 
+            TODO add open and close
+            xml_file=open(xml_filepath, 'r')
+            xml_data = xml_file.read()
+            xml_file.close()
 
+            or simply:
+
+            with open(xml_filepath, 'r') as xml_file:
+                xml_data = xml_file.read()
+
+            """
             xml_data = open(xml_filepath, 'r').read()
             dict_data = xmltodict.parse(xml_data)
+
+
             bid_list = dict_data["list"]["bid"]
 
             kafka_obj.produce_message(topic_name=tp_nm.lfc_bsp_lmol,

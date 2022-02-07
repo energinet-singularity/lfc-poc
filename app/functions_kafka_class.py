@@ -162,7 +162,7 @@ class KafkaHelper:
 
     # Method: Create a dictionary with topic partion --> last read offset
     def create_topic_partitions_last_read_offset_dict(self):
-        # TODO verify if this works for empty topic
+        # TODO verify if this works for empty topic (works with minus 1?)
 
         topic_partitions_dict = self.create_topic_partitions_dict()
         last_read_offset_topic_partitions_dict = self.create_topic_partitions_begin_offsets_dict()
@@ -172,6 +172,8 @@ class KafkaHelper:
                 begin_offset = last_read_offset_topic_partitions_dict[topic][topic_partition]
                 if begin_offset != 0:
                     last_read_offset_topic_partitions_dict[topic][topic_partition] = begin_offset-1
+                elif begin_offset == 0:
+                    last_read_offset_topic_partitions_dict[topic][topic_partition] = -1
 
         return last_read_offset_topic_partitions_dict
 
@@ -344,8 +346,8 @@ class KafkaHelper:
             if topic_latest_message_value_dict[topic] is None:
                 empty_topics.append(topic)
             if empty_topics:
-                add_to_log(f"Error: No data was availiable on consumed Kafka Topic(s): {empty_topics}.")
-                sys.exit(1)
+                add_to_log(f"Warning: No data was availiable on consumed Kafka Topic(s): {empty_topics}.")
+                # sys.exit(1)
 
         return topic_latest_message_value_dict
 
