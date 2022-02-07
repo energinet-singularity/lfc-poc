@@ -27,8 +27,7 @@ if __name__ == "__main__":
     topics_consumed_list = [tp_nm.lfc_p_dem, tp_nm.lfc_p_corr, tp_nm.lfc_p_input,
                             tp_nm.lfc_p_target, tp_nm.lfc_pbr_response, tp_nm.lfc_mw_diff,
                             tp_nm.lfc_bsp_lmol,
-                            tp_nm.lfc_bsp_activated,
-    ]
+                            tp_nm.lfc_bsp_activated]
 
     # init kafka
     kafka_obj = KafkaHelper(group_id="None",
@@ -84,14 +83,6 @@ if __name__ == "__main__":
                                                 default_val="NA",
                                                 precision=PARM.PRECISION_DECIMALS)"""
                 lfc_table.add_row([row["NAME"], msg_val, row["DESCP"]])
-
-
-
-
-
-
-
-
 
         # LMOL data
         data_lmol = loads(msg_val_dict[tp_nm.lfc_bsp_lmol][msg_val_nm.lfc_bsp_lmol])
