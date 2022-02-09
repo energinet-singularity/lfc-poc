@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list>
+    <bid>
+        <mrid_bsp>DONG-W_MRID</mrid_bsp>
+        <mrid_bid>D111</mrid_bid>
+        <name>DONG-W</name>
+        <direction>UP</direction>
+        <price>5</price>
+        <capacity>20</capacity>
+        <availiable>True</availiable>
+    </bid>
+    <bid>
+        <mrid_bsp>CENTRICA_MRID</mrid_bsp>
+        <mrid_bid>C111</mrid_bid>
+        <name>CENTRICA</name>
+        <direction>UP</direction>
+        <price>10</price>
+        <capacity>10</capacity>
+        <availiable>True</availiable>
+    </bid>
+    <bid>
+        <mrid_bsp>DONG-W_MRID</mrid_bsp>
+        <mrid_bid>D222</mrid_bid>
+        <name>DONG-W</name>
+        <direction>DOWN</direction>
+        <price>20</price>
+        <capacity>50</capacity>
+        <availiable>True</availiable>
+    </bid>
+    <bid>
+        <mrid_bsp>CENTRICA_MRID</mrid_bsp>
+        <mrid_bid>C222</mrid_bid>
+        <name>CENTRICA</name>
+        <direction>DOWN</direction>
+        <price>10</price>
+        <capacity>50</capacity>
+        <availiable>True</availiable>
+    </bid>
+</list>

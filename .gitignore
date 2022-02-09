@@ -134,6 +134,3 @@ test_signal_gen.ipynb
 # docker compose and deployment yaml file for testing
 docker-compose.yaml
 deployment.yaml
-
-# data for lmol parser
-data/
