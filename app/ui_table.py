@@ -76,40 +76,40 @@ if __name__ == "__main__":
 
         for row in table_row_dict:
             if "tp_nm" in row:
-                msg_val = msg_val_dict[row["tp_nm"]][row["msg_val_nm"]]
-                """get_msg_val_from_dict(msg_val_dict=topic_latest_message_value_dict,
-                                                tp_nm=row["tp_nm"],
-                                                msg_val_nm=row["msg_val_nm"],
-                                                default_val="NA",
-                                                precision=PARM.PRECISION_DECIMALS)"""
+                if msg_val_dict[row["tp_nm"]] is None:
+                    msg_val = "N/A"
+                else:
+                    msg_val = msg_val_dict[row["tp_nm"]][row["msg_val_nm"]]
                 lfc_table.add_row([row["NAME"], msg_val, row["DESCP"]])
 
         # LMOL data
-        data_lmol = loads(msg_val_dict[tp_nm.lfc_bsp_lmol][msg_val_nm.lfc_bsp_lmol])
-        data_lmol.sort(key=lambda x: (x['direction'], float(x['price'])), reverse=False)
+        if msg_val_dict[tp_nm.lfc_bsp_lmol] is not None:
+            data_lmol = loads(msg_val_dict[tp_nm.lfc_bsp_lmol][msg_val_nm.lfc_bsp_lmol])
+            data_lmol.sort(key=lambda x: (x['direction'], float(x['price'])), reverse=False)
 
-        # Fill table with bids from LMOL
-        for bid in data_lmol:
-            # TODO loop list og lav table der ud fra
-            bid_table.add_row([bid["mrid_bsp"],
-                              bid["mrid_bid"],
-                              bid["name"],
-                              bid["direction"],
-                              bid["price"],
-                              bid["capacity"],
-                              bid["availiable"]])
+            # Fill table with bids from LMOL
+            for bid in data_lmol:
+                # TODO loop list og lav table der ud fra
+                bid_table.add_row([bid["mrid_bsp"],
+                                  bid["mrid_bid"],
+                                  bid["name"],
+                                  bid["direction"],
+                                  bid["price"],
+                                  bid["capacity"],
+                                  bid["availiable"]])
 
         # BSP data
-        data_bsp = msg_val_dict[tp_nm.lfc_bsp_activated][msg_val_nm.lfc_bsp_activated]
-        data_bsp.sort(key=lambda x: x['mrid'], reverse=False)
+        if msg_val_dict[tp_nm.lfc_bsp_activated] is not None:
+            data_bsp = msg_val_dict[tp_nm.lfc_bsp_activated][msg_val_nm.lfc_bsp_activated]
+            data_bsp.sort(key=lambda x: x['mrid'], reverse=False)
 
-        # Fill table
-        for key in data_bsp:
-            bsp_table.add_row([key["mrid"], key["setpoint"]])
+            # Fill table
+            for key in data_bsp:
+                bsp_table.add_row([key["mrid"], key["setpoint"]])
 
         # display tables
         print_lfc_logo_doh()
-        
+
         lfc_table.align = "l"
         lfc_table.junction_char
         print(lfc_table)
@@ -127,4 +127,3 @@ if __name__ == "__main__":
         add_to_log("")
 
         sleep(0.5)
-

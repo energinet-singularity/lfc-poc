@@ -30,14 +30,19 @@ class KafkaHelper:
                  topics_produced_list=[],
                  poll_timeout_ms=100):
 
-        # attributes set on object instansiation, either bt default or supplied values.
+        # attributes set on object instansiation, either by default or supplied values.
         self.group_id = group_id
         self.auto_offset_reset = auto_offset_reset
         self.enable_auto_commit = enable_auto_commit
         self.topics_consumed_list = topics_consumed_list
         self.topics_produced_list = topics_produced_list
-        self.topic_list = list(set(self.topics_produced_list + self.topics_consumed_list))
         self.poll_timeout_ms = poll_timeout_ms
+
+        # attributes set based on others
+        self.topic_list = list(set(self.topics_produced_list + self.topics_consumed_list))
+        self.topics_consumed_only = list(set(self.topics_consumed_list) - set(self.topics_produced_list))
+        self.topics_produced_only = list(set(self.topics_produced_list) - set(self.topics_consumed_list))
+        self.topics_consumed_and_produced = list(set(self.topics_consumed_list).intersection(self.topics_produced_list))
 
         # attributes init by methods on creation
         self.bootstrap_servers = None
@@ -117,7 +122,7 @@ class KafkaHelper:
             add_to_log(f"Error: The Topic(s): {unavbl_topics} does not exist.")
             sys.exit(1)
 
-    # Method: Create a dictionary with partions availiable for each topic.
+    # Method: Create a dictionary with partitions availiable for each topic.
     def create_topic_partitions_dict(self):
         if type(self.topic_list) != list:
             add_to_log(f"Error: Supplied topics must have the type 'list' but is {type(self.topic_list)}")
@@ -135,7 +140,7 @@ class KafkaHelper:
 
         return topic_partitions_dict
 
-    # Method: Create a dictionary with topic partion --> begin offsets
+    # Method: Create a dictionary with topic partition --> begin offsets
     def create_topic_partitions_begin_offsets_dict(self):
         begin_offset_topic_partitions_dict = {}
 
@@ -148,7 +153,7 @@ class KafkaHelper:
 
         return begin_offset_topic_partitions_dict
 
-    # Method: Create a dictionary with topic partion --> end offsets
+    # Method: Create a dictionary with topic partition --> end offsets
     def create_topic_partitions_end_offsets_dict(self):
         end_offset_topic_partitions_dict = {}
         try:
@@ -160,7 +165,7 @@ class KafkaHelper:
 
         return end_offset_topic_partitions_dict
 
-    # Method: Create a dictionary with topic partion --> last read offset
+    # Method: Create a dictionary with topic partition --> last read offset
     def create_topic_partitions_last_read_offset_dict(self):
         # TODO verify if this works for empty topic (works with minus 1?)
 
@@ -186,6 +191,36 @@ class KafkaHelper:
             topic_latest_message_value_dict[topic] = None
         return topic_latest_message_timestamp_dict, topic_latest_message_value_dict
 
+    # Method: list empty topics
+    def list_empty_topics(self, topic_list):
+        topic_partitions_dict = self.create_topic_partitions_dict()
+        end_offset_topic_partitions_dict = self.create_topic_partitions_end_offsets_dict()
+
+        empty_topics = topic_list
+
+        for topic in topic_list:
+            # loop all partitions for topic
+            for topic_partition in topic_partitions_dict[topic]:
+                if end_offset_topic_partitions_dict[topic][topic_partition] > 0:
+                    empty_topics.remove(topic)
+
+        return empty_topics
+
+    # Method: list empty consumed only topics
+    def list_empty_consumed_only_topics(self):
+        empty_topics = self.list_empty_topics(self.topics_consumed_only)
+        return empty_topics
+
+    # Method: list empty produced only topics
+    def list_empty_produced_only_topics(self):
+        empty_topics = self.list_empty_topics(self.topics_produced_only)
+        return empty_topics
+
+    # Method: list empty consuemd and produced topics
+    def list_empty_consumed_and_produced_topics(self):
+        empty_topics = self.list_empty_topics(self.topics_consumed_and_produced)
+        return empty_topics
+
     # Method: Seek partitions to latest availiable message
     def seek_topic_partitions_latest(self):
         topic_partitions_dict = self.create_topic_partitions_dict()
@@ -195,12 +230,12 @@ class KafkaHelper:
             # loop topics and seek all partitions to latest availiable message
             for topic in self.topics_consumed_list:
                 # loop all partitions for topic
-                for topic_partion in topic_partitions_dict[topic]:
+                for topic_partition in topic_partitions_dict[topic]:
                     # if they have messages, per partition
-                    if end_offset_topic_partitions_dict[topic][topic_partion] > 0:
+                    if end_offset_topic_partitions_dict[topic][topic_partition] > 0:
                         # seek to highest offset-1
-                        partition = topic_partitions_dict[topic][topic_partion.partition]
-                        offset = end_offset_topic_partitions_dict[topic][topic_partion]-1
+                        partition = topic_partitions_dict[topic][topic_partition.partition]
+                        offset = end_offset_topic_partitions_dict[topic][topic_partition]-1
                         self.consumer.seek(partition, offset)
         except Exception as e:
             add_to_log(f"Error: Seeking consumer: '{partition}' to offset: {offset} failed with message '{e}'.")
@@ -254,7 +289,7 @@ class KafkaHelper:
                     if last_read_offset_topic_partitions_dict[topic][topic_partition] < end_offset_topic_partitions_dict[topic][topic_partition]-1:
                         topic_partitions_not_reached_last_offset.append(topic_partition)
 
-            # If all partions have been consumed till latest offset, break out of polling loop
+            # If all partitions have been consumed till latest offset, break out of polling loop
             if len(topic_partitions_not_reached_last_offset) == 0:
                 is_polling = False
 
@@ -299,7 +334,7 @@ class KafkaHelper:
                     if last_read_offset_topic_partitions_dict[topic][topic_partition] < end_offset_topic_partitions_dict[topic][topic_partition]-1:
                         topic_partitions_not_reached_last_offset.append(topic_partition)
 
-            # If all partions have been consumed till latest offset, break out of conusmer loop
+            # If all partitions have been consumed till latest offset, break out of conusmer loop
             if len(topic_partitions_not_reached_last_offset) == 0:
                 break
 
@@ -341,13 +376,15 @@ class KafkaHelper:
         topic_latest_message_value_dict = self.get_latest_topic_messages_to_dict_poll_based()
         # topic_latest_message_value_dict = self.get_latest_topic_messages_to_dict_loop_based()
 
+        """
         empty_topics = []
         for topic in topic_latest_message_value_dict:
             if topic_latest_message_value_dict[topic] is None:
                 empty_topics.append(topic)
-            if empty_topics:
-                add_to_log(f"Warning: No data was availiable on consumed Kafka Topic(s): {empty_topics}.")
-                # sys.exit(1)
+        if empty_topics:
+            add_to_log(f"Warning: No data was availiable on consumed Kafka Topic(s): {empty_topics}.")
+            # sys.exit(1)
+        """
 
         return topic_latest_message_value_dict
 

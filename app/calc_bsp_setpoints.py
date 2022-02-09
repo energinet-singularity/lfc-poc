@@ -13,12 +13,12 @@ import parm_general as PARM
 
 """
 TODO:
-- BSP simulering skal tage sum af setpoints frem for P_target (eller hverfald noget sum af loop hastigheder?)
-- lav en samlet table ui?
-- Dokumenter classes ordentligt
+- byg visning ind af om bud er aktiv (som ny tabel eller blot visning i act bsp)
 - brug kafka helper alle steder
+- check if topics which are both produced and consumed are empty, else init (funktion som gør det og melder hvis nogle ikke sættes)
+- BSP simulering skal tage sum af setpoints frem for P_target (eller hverfald noget sum af loop hastigheder?)
+- Dokumenter classes ordentligt
 - brug non root user i dockerfile som vku
-- PBR simulering laves så der er en for hver BSP?
 - Lav kafka topics som env vars
 - Lav table ui som message loops?
 - LMOL via file mount?
@@ -191,8 +191,7 @@ if __name__ == "__main__":
                             topics_produced_list=topics_produced_list,
                             poll_timeout_ms=PARM.TIMEOUT_MS_POLL)
 
-    add_to_log("Activating BSP in merit order based on LMOL and P_target..")
-    add_to_log("|-----------------------------------------|")
+    add_to_log("Info: Activating BSP in merit order based on LMOL and P_target..")
 
     while True:
         # refresh rate
@@ -205,15 +204,17 @@ if __name__ == "__main__":
         msg_val_dict = kafka_obj.get_latest_msg_from_consumed_topics_to_dict()
         # add_to_log(f"Debug: Getting messages took: {round(time()-time_loop_start,3)} secounds.")
 
-        # check if values are missing
-        if None in msg_val_dict.values():
-            add_to_log("Warning: Missing inputdata, BSP activation paused.")
+        # check if consumed only data is availiable and wait if not, else do it
+        empty_consumed_only_topics = kafka_obj.list_empty_consumed_only_topics()
+        if empty_consumed_only_topics:
+            sleep(1)
+            add_to_log(f"Warning: The consumed only topics: {empty_consumed_only_topics} are empty. Waiting for input data.")
 
         else:
             # Get p target
             p_target = msg_val_dict[tp_nm.lfc_p_target][msg_val_nm.lfc_p_target]
 
-            # get lmol and sort
+            # get lmol
             lmol_data = msg_val_dict[tp_nm.lfc_bsp_lmol][msg_val_nm.lfc_bsp_lmol]
 
             # sort lmol
@@ -230,10 +231,7 @@ if __name__ == "__main__":
 
                 bsp_setpoint_list = lmol_obj.bsp_func()
 
-                # for bsp in bsp_setpoint_list:
-                    # add_to_log(f"Info: Setpoint set to: {bsp.setpoint} for '{bsp.mrid}'")
-
                 kafka_obj.produce_message(topic_name=tp_nm.lfc_bsp_activated,
-                                        msg_value={msg_val_nm.lfc_bsp_activated: [bsp.__dict__ for bsp in bsp_setpoint_list]})
+                                          msg_value={msg_val_nm.lfc_bsp_activated: [bsp.__dict__ for bsp in bsp_setpoint_list]})
 
-                add_to_log(f"Debug: BSP activation done in: {round(time()-time_loop_start,3)} secounds.")
+                # add_to_log(f"Debug: BSP activation done in: {round(time()-time_loop_start,3)} secounds.")

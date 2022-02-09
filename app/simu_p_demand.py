@@ -1,12 +1,8 @@
 # Import dependencies
 from time import sleep, time
-import sys
 
 # Import functions
-from functions_kafka import (set_kafka_brooker_from_env, init_producer, init_consumer, init_topic_partitions,
-                             subscribe_topics, produce_message,
-                             get_latest_topic_messages_to_dict_poll_based, get_msg_val_from_dict,
-                             list_unavbl_topics, list_empty_topics)
+from functions_kafka_class import KafkaHelper
 from functions_lfc import (add_to_log)
 
 # Import parameters, Kafka topic names and message value names
@@ -45,42 +41,23 @@ def calc_simulated_pbr_response(p_target: float, last_pbr_response: float):
 
 
 if __name__ == "__main__":
-    # print_lfc_logo()
-    add_to_log("Info: LFC p_demand response simulation initializing..")
 
-    # Set Kafka brooker from environment variables
-    kafka_brooker = set_kafka_brooker_from_env()
+    add_to_log("Info: Initilizing simulation of LFC P_demand response....")
 
-    # Create lists of topic names (produced to, consumed from and combined list)
+    # Create lists of topic names which are consumed and produced
     topics_produced_list = [tp_nm.lfc_p_dem, tp_nm.lfc_pbr_response]
     topics_consumed_list = [tp_nm.lfc_p_target, tp_nm.lfc_mw_diff, tp_nm.lfc_pbr_response]
-    topics_list = list(set(topics_produced_list + topics_consumed_list))
 
-    # Create dictionary for holding latest message value for each consumed topic
-    topic_latest_message_value_dict = {}
-
-    # Initialize Kafka producer
-    producer_kafka = init_producer(bootstrap_servers=kafka_brooker)
-
-    # Initialize Kafka consumer
+    # inint kafka
     consumer_gp_nm = "lfc_demand_response_simu"
-    consumer_kafka = init_consumer(bootstrap_servers=kafka_brooker,
-                                   group_id=consumer_gp_nm,
-                                   auto_offset_reset='earliest',
-                                   enable_auto_commit=False)
-
-    # Subscribe to consumed topics
-    subscribe_topics(consumer=consumer_kafka, topic_list=topics_consumed_list)
-
-    # Dummy poll needed to force partitions assignment
-    init_topic_partitions(consumer=consumer_kafka, topic_list=topics_consumed_list, timeout_ms=PARM.TIMEOUT_MS_POLL)
-
-    # Verify if all needed kafka topics exist
-    if list_unavbl_topics(consumer=consumer_kafka, topic_list=topics_list, print_err=True):
-        sys.exit(1)
+    kafka_obj = KafkaHelper(group_id=consumer_gp_nm,
+                            auto_offset_reset="earliest",
+                            enable_auto_commit=False,
+                            topics_consumed_list=topics_consumed_list,
+                            topics_produced_list=topics_produced_list,
+                            poll_timeout_ms=PARM.TIMEOUT_MS_POLL)
 
     add_to_log("Info: Simulating LFC P_demand response....")
-    add_to_log("|-------------------------------------------------|")
 
     """
     Looping to simulate reponse of elctrical grid. Simulation is done by:
@@ -92,58 +69,45 @@ if __name__ == "__main__":
         # Save start time for loop
         time_loop_start = time()
 
-        # Get latest value for each comnsumed topic
-        topic_latest_message_value_dict = get_latest_topic_messages_to_dict_poll_based(consumer=consumer_kafka,
-                                                                                       topic_list=topics_consumed_list,
-                                                                                       timeout_ms=PARM.TIMEOUT_MS_POLL)
-        # add_to_log(f"Debug: Getting messages took: {round(time()-time_loop_start,3)} secounds.")
+        # check if topics which are both produced and consumed are empty, else init
+        empty_consumed_and_produced_topics = kafka_obj.list_empty_consumed_and_produced_topics()
+        for topic in empty_consumed_and_produced_topics:
+            if topic == tp_nm.lfc_pbr_response:
+                add_to_log(f"Info: Topic {topic} was empty. Initialised with default value.")
+                kafka_obj.produce_message(topic_name=tp_nm.lfc_pbr_response,
+                                          msg_value={msg_val_nm.lfc_pbr_response: 0})
 
-        # Report warnings on empty topics
-        list_empty_topics(topic_latest_message_value_dict=topic_latest_message_value_dict, print_warn=True)
+        # check if consumed only data is availiable and wait if not, else do it
+        empty_consumed_only_topics = kafka_obj.list_empty_consumed_only_topics()
+        if empty_consumed_only_topics:
+            sleep(1)
+            add_to_log(f"Warning: The consumed only topics: {empty_consumed_only_topics} are empty. Waiting for input data.")
+        else:
+            # get latest messages from consumed topics
+            msg_val_dict = kafka_obj.get_latest_msg_from_consumed_topics_to_dict()
+            # add_to_log(f"Debug: Getting messages took: {round(time()-time_loop_start,3)} secounds.")
 
-        # Extract values (topic/value specific) and round to decimals defined by precision variable.
-        # If message value is not availiable from topic set value to 0.
-        # TODO make smarter. Nested dict for holding data values instead of variables?
-        # - current LFC p_target (consumed only, default val: 0)
-        current_lfc_p_target = get_msg_val_from_dict(msg_val_dict=topic_latest_message_value_dict,
-                                                     tp_nm=tp_nm.lfc_p_target,
-                                                     msg_val_nm=msg_val_nm.lfc_p_target,
-                                                     default_val=0,
-                                                     precision=PARM.PRECISION_DECIMALS)
+            # getting values
+            # TODO: Rounding?
+            current_lfc_p_target = msg_val_dict[tp_nm.lfc_p_target][msg_val_nm.lfc_p_target]
+            current_lfc_mw_diff = msg_val_dict[tp_nm.lfc_mw_diff][msg_val_nm.lfc_mw_diff]
+            last_pbr_response = msg_val_dict[tp_nm.lfc_pbr_response][msg_val_nm.lfc_pbr_response]
 
-        # - current mw diff (consumed only, default val: 0)
-        current_lfc_mw_diff = get_msg_val_from_dict(msg_val_dict=topic_latest_message_value_dict,
-                                                    tp_nm=tp_nm.lfc_mw_diff,
-                                                    msg_val_nm=msg_val_nm.lfc_mw_diff,
-                                                    default_val=0,
-                                                    precision=PARM.PRECISION_DECIMALS)
+            # Calculate simulated PBR responce
+            response_pbr = calc_simulated_pbr_response(p_target=current_lfc_p_target,
+                                                       last_pbr_response=last_pbr_response)
+            add_to_log(f"Info: PBR response is: {response_pbr}")
+            add_to_log(f"Info: MW_diff is: {current_lfc_mw_diff}")
 
-        # - last pbr_response (consumed and produced, default val: 0)
-        last_pbr_response = get_msg_val_from_dict(msg_val_dict=topic_latest_message_value_dict,
-                                                  tp_nm=tp_nm.lfc_pbr_response,
-                                                  msg_val_nm=msg_val_nm.lfc_pbr_response,
-                                                  default_val=0,
-                                                  precision=PARM.PRECISION_DECIMALS)
+            # Send current pbr repsonce to kafka topic
+            kafka_obj.produce_message(topic_name=tp_nm.lfc_pbr_response,
+                                      msg_value={msg_val_nm.lfc_pbr_response: response_pbr})
 
-        # Calculate simulated PBR responce
-        response_pbr = calc_simulated_pbr_response(p_target=current_lfc_p_target,
-                                                   last_pbr_response=last_pbr_response)
-        add_to_log(f"Info: PBR response is: {response_pbr}")
-        add_to_log(f"Info: MW_diff is: {current_lfc_mw_diff}")
+            # Send simulated electrical grid responce (sum of mw diff and PBR response) to kafka topic
+            response_system = round(current_lfc_mw_diff+response_pbr, PARM.PRECISION_DECIMALS)
+            kafka_obj.produce_message(topic_name=tp_nm.lfc_p_dem,
+                                      msg_value={msg_val_nm.lfc_p_dem: response_system})
+            add_to_log(f"Info: System response: {response_system} was send as LFC p_demand")
 
-        # Send current pbr repsonce to kafka topic
-        produce_message(producer=producer_kafka,
-                        topic_name=tp_nm.lfc_pbr_response,
-                        value={msg_val_nm.lfc_pbr_response: response_pbr})
-
-        # Send simulated electrical grid responce (sum of mw diff and PBR response) to kafka topic
-        response_system = round(current_lfc_mw_diff+response_pbr, PARM.PRECISION_DECIMALS)
-        produce_message(producer=producer_kafka, topic_name=tp_nm.lfc_p_dem,
-                        value={msg_val_nm.lfc_p_dem: response_system})
-        add_to_log(f"Info: System response: {response_system} was send as new LFC p_demand")
-
-        # add_to_log(f"Debug: Loop took: {round(time()-time_loop_start,3)} secounds.")
-        add_to_log("|-------------------------------------------------|")
-
-        # sleep
-        sleep(PARM.REFRESH_RATE_S_LFC_DEM_SIMU)
+            # sleep
+            sleep(PARM.REFRESH_RATE_S_LFC_DEM_SIMU)
