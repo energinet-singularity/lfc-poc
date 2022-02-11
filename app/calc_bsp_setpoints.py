@@ -207,8 +207,8 @@ if __name__ == "__main__":
         # check if consumed only data is availiable and wait if not, else do it
         empty_consumed_only_topics = kafka_obj.list_empty_consumed_only_topics()
         if empty_consumed_only_topics:
-            sleep(1)
             add_to_log(f"Warning: The consumed only topics: {empty_consumed_only_topics} are empty. Waiting for input data.")
+            sleep(1)
 
         else:
             # Get p target
