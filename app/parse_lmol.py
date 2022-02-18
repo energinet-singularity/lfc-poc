@@ -1,16 +1,20 @@
 # Import dependencies
 from time import sleep
 from json import dumps
+import logging
 import os
 import xmltodict
 
 # Import functions
-from functions_kafka_class import KafkaHelper
-from functions_lfc import add_to_log
+from singukafka import KafkaHelper, config_logging
 
 # Import parameters, Kafka topic names and message value names
 import parm_kafka_topic_nm as tp_nm
 import parm_kafka_msg_val_nm as msg_val_nm
+
+# Initialize log
+log = logging.getLogger(__name__)
+config_logging()
 
 xml_last_modified = 0
 # TODO do not use relative path
@@ -31,7 +35,7 @@ if __name__ == "__main__":
         xml_modified = os.path.getmtime(xml_filepath)
 
         if xml_last_modified != xml_modified:
-            add_to_log(f"Info: Reading bid list from: '{xml_filepath}''.")
+            log.info(f"Reading bid list from: '{xml_filepath}''.")
 
             """
             TODO add open and close
@@ -54,4 +58,4 @@ if __name__ == "__main__":
                                       msg_value={msg_val_nm.lfc_bsp_lmol: dumps(bid_list)})
 
             xml_last_modified = xml_modified
-            add_to_log("Info: Read bid list and send as message to Kafka.")
+            log.info(f"Read bid list and send as message to Kafka.")

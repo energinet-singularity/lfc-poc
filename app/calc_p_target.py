@@ -1,38 +1,51 @@
 # Import dependencies
 from time import sleep, time
 from datetime import datetime
+import logging
 
 # Import functions
-from functions_kafka_class import KafkaHelper
-from functions_lfc import (add_to_log)
+from singukafka import KafkaHelper, config_logging
 
 # Import parameters, Kafka topic names and message value names
 import parm_kafka_topic_nm as tp_nm
 import parm_kafka_msg_val_nm as msg_val_nm
-import parm_general as PARM
+
+# constants
+# TODO include as default setting instead and make possible to change
+PRECISION_DECIMALS = 2
+CYCLETIME_S_LFC = 4
+SETPOINT_LFC_P_INPUT = 0
+KP = 0.01
+KI = 0.02
+KD = 0
+DEADBAND_LFC_ERROR = 0.5
+
+# Initialize log
+log = logging.getLogger(__name__)
+config_logging()
 
 
 def lfc_pid_controller(meas: float, last_error: float, last_error_sum: float, cycletime_s: float):
     """
     PID controller calculating target based on PID-settings, measrurement and setpoint.
     """
-    error = PARM.SETPOINT_LFC_P_INPUT - meas
+    error = SETPOINT_LFC_P_INPUT - meas
 
-    if abs(error) < PARM.DEADBAND_LFC_ERROR:
+    if abs(error) < DEADBAND_LFC_ERROR:
         error = 0
-        add_to_log(f"Info: LFC error is respecting deadband: {PARM.DEADBAND_LFC_ERROR}")
+        log.info(f"LFC error is respecting deadband: {DEADBAND_LFC_ERROR}")
 
     error_sum = last_error_sum + (error * cycletime_s)
     error_diff = (error - last_error) / cycletime_s
 
-    target = round(PARM.KP * error + PARM.KI * error_sum + PARM.KD * error_diff, PARM.PRECISION_DECIMALS)
+    target = round(KP * error + KI * error_sum + KD * error_diff, PRECISION_DECIMALS)
 
     return target, error, error_sum, error_diff
 
 
 if __name__ == "__main__":
 
-    add_to_log("Info: LFC p_target calculation initializing..")
+    log.info(f"LFC p_target calculation initializing..")
 
     # Create lists of topic names (produced to, consumed from and combined list)
     topics_produced_list = [tp_nm.lfc_p_target, tp_nm.lfc_p_target_state]
@@ -44,10 +57,9 @@ if __name__ == "__main__":
                             auto_offset_reset="earliest",
                             enable_auto_commit=False,
                             topics_consumed_list=topics_consumed_list,
-                            topics_produced_list=topics_produced_list,
-                            poll_timeout_ms=PARM.TIMEOUT_MS_POLL)
+                            topics_produced_list=topics_produced_list)
 
-    add_to_log("Calculating LFC p_target by use of PID-controller..")
+    log.info("Calculating LFC p_target by use of PID-controller..")
 
     """
     TODO describe
@@ -60,7 +72,7 @@ if __name__ == "__main__":
         empty_consumed_and_produced_topics = kafka_obj.list_empty_consumed_and_produced_topics()
         for topic in empty_consumed_and_produced_topics:
             if topic == tp_nm.lfc_p_target_state:
-                add_to_log(f"Info: Topic {topic} was empty. Initialised with default value.")
+                log.info(f"Topic {topic} was empty. Initialised with default value.")
                 kafka_obj.produce_message(topic_name=tp_nm.lfc_p_target_state,
                                           msg_value={'Timestamp': str(datetime.now()),
                                                      msg_val_nm.lfc_p_target: 0,
@@ -72,16 +84,16 @@ if __name__ == "__main__":
         empty_consumed_only_topics = kafka_obj.list_empty_consumed_only_topics()
         if empty_consumed_only_topics:
             sleep(1)
-            add_to_log(f"Warning: The consumed only topics: {empty_consumed_only_topics} are empty. Waiting for input data.")
+            log.warning(f"The consumed only topics: {empty_consumed_only_topics} are empty. Waiting for input data.")
         else:
             # get latest messages from consumed topics
-            msg_val_dict = kafka_obj.get_latest_msg_from_consumed_topics_to_dict()
+            msg_val_dict = kafka_obj.get_latest_topic_messages_to_dict_poll_based()
 
             current_lfc_p_input = msg_val_dict[tp_nm.lfc_p_input][msg_val_nm.lfc_p_input]
             last_error = msg_val_dict[tp_nm.lfc_p_target_state][msg_val_nm.lfc_p_target_error]
             last_error_sum = msg_val_dict[tp_nm.lfc_p_target_state][msg_val_nm.lfc_p_target_error_sum]
 
-            add_to_log(f"Info: LFC p_input is: {current_lfc_p_input}. Calculating p_target..")
+            log.info(f"LFC p_input is: {current_lfc_p_input}. Calculating p_target..")
 
             """
             TODO calc cycle time baseret på seneste kørsel, hvad hvis meget lang (2xcycle time) = restart?
@@ -101,8 +113,8 @@ if __name__ == "__main__":
             lfc_p_target, error, error_sum, error_diff = lfc_pid_controller(meas=current_lfc_p_input,
                                                                             last_error=last_error,
                                                                             last_error_sum=last_error_sum,
-                                                                            cycletime_s=PARM.CYCLETIME_S_LFC)
-            add_to_log(f"Info: LFC p_target is: {lfc_p_target}")
+                                                                            cycletime_s=CYCLETIME_S_LFC)
+            log.info(f"LFC p_target is: {lfc_p_target}")
 
             # Send state of calculation to Kakfa foir usage in enxt cycle
             kafka_obj.produce_message(topic_name=tp_nm.lfc_p_target_state,
@@ -116,4 +128,4 @@ if __name__ == "__main__":
             kafka_obj.produce_message(topic_name=tp_nm.lfc_p_target,
                                       msg_value={msg_val_nm.lfc_p_target: lfc_p_target})
 
-            sleep(PARM.CYCLETIME_S_LFC)
+            sleep(CYCLETIME_S_LFC)

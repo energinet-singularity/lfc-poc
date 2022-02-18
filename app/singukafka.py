@@ -1,8 +1,13 @@
 from kafka import KafkaProducer, KafkaConsumer, TopicPartition
 from json import dumps, loads
+import pandas as pd
+from time import time
 import sys
 import os
-from functions_lfc import add_to_log
+import logging
+
+# Initialize log
+log = logging.getLogger(__name__)
 
 
 # TODO documentation
@@ -57,75 +62,119 @@ class KafkaHelper:
         if topics_produced_list:
             self.init_producer()
         self.verify_topic_existence()
+        # TODO move this init to seek function only ?
         self.init_topic_partitions()
 
     # Method: set kafka brooker from ENV or default to value
     def set_kafka_brooker_from_env(self):
-        self.bootstrap_servers = os.environ.get('KAFKA_HOST', "my-cluster-kafka-bootstrap.kafka")
+        log.debug("Setting kafka boostrap servers from environment variable.")
+        try:
+            self.bootstrap_servers = os.environ.get('KAFKA_HOST', "my-cluster-kafka-bootstrap.kafka")
+            log.info(f"Kakfa bootsrap servers was set to: {self.bootstrap_servers}")
+        except Exception as e:
+            log.exception(f"Setting kafka boostrap servers from environment variable failed with message: '{e}'.")
+            sys.exit(1)
 
     # Method: Initializes Kafka comsumer.
     def init_consumer(self):
+        log.debug("Kafka consumer connection initializing.")
         try:
             self.consumer = KafkaConsumer(bootstrap_servers=self.bootstrap_servers,
                                           group_id=self.group_id,
                                           value_deserializer=lambda x: loads(x.decode('utf-8')),
                                           auto_offset_reset=self.auto_offset_reset,
-                                          enable_auto_commit=self.enable_auto_commit)
-            add_to_log("Info: Kafka consumer connection established.")
+                                          enable_auto_commit=self.enable_auto_commit,
+                                          fetch_max_wait_ms=100)
+            log.info("Kafka consumer connection established.")
         except Exception as e:
-            add_to_log(f"Error: Kafka Consumer connection failed with message: '{e}'.")
+            log.exception(f"Kafka Consumer connection failed with message: '{e}'.")
             sys.exit(1)
 
     # Method: Initializes Kafka producer.
     def init_producer(self):
+        log.debug("Kafka producer connection initializing.")
         try:
             self.producer = KafkaProducer(bootstrap_servers=self.bootstrap_servers,
-                                          value_serializer=lambda x: dumps(x).encode('utf-8'))
-            add_to_log("Info: Kafka producer connection established.")
+                                          value_serializer=lambda x: dumps(x).encode('utf-8'),
+                                          key_serializer=lambda x: dumps(x).encode('utf-8'))
+            log.info("Kafka producer connection established.")
         except Exception as e:
-            add_to_log(f"Error: Kafka producer connection failed with message: '{e}'.")
+            log.exception(f"Kafka producer connection failed with message: '{e}'.")
             sys.exit(1)
 
     # Method: Dummy Poll, which is needed to force assignment of partitions after subsribtion to topics.
     def init_topic_partitions(self):
-        # TODO check if using a dummy poll is the correct way
-        # TODO handle that when making dummy poll, if auto comit is enabled, then the offset will shift unessecary?
+        log.debug("Initiliasing topic partitions assignemnt.")
+        # TODO check if using a dummy poll is the correct way, maybe also consumer loop could work?
+        # TODO handle that when making dummy poll, if auto comit is enabled, then the offset will shift unessecary? (fix by using position and seek)
         try:
             self.consumer.poll(timeout_ms=self.poll_timeout_ms)
-            add_to_log("Info: Initial poll done. TopicPartitions are now assigned.")
+            log.info("Initial poll done. TopicPartitions are now assigned.")
         except Exception as e:
-            add_to_log(f"Error: Initial poll failed with message '{e}'.")
+            log.exception(f"Initial poll failed with message '{e}'.")
             sys.exit(1)
+        """
+        if len(kafka_obj.list_empty_consumed_only_topics()) == 10:
+            try:
+                for message in kafka_obj.consumer:
+                    break
+                kafka_obj.consumer.seek(partition=TopicPartition(message.topic, message.partition),offset=message.offset)
+            except Exception as e:
+                log.exception(f"?? failed with message '{e}'.")
+                sys.exit(1)
+        else:
+            try:
+                kafka_obj.consumer.poll()
+
+                if self.auto_offset_reset == 'earliest':
+                    self.consumer.seek_to_beginning()
+                elif self.auto_offset_reset == 'latest':
+                    # TODO handle this how?
+                    pass
+
+                log.info("Initial poll done. TopicPartitions are now assigned.")
+
+            except Exception as e:
+                log.exception(f"Initial poll failed with message '{e}'.")
+                sys.exit(1)
+
+        # kafka_obj.seek_topic_partitions_latest()
+        """
 
     # Method: Subscribes consumer to topics
     def subscribe_topics(self):
+        log.debug("Subscribing to consumed kafka topics.")
         try:
             self.consumer.subscribe(self.topics_consumed_list)
-            add_to_log(f"Info: Kafka consumer subscribed to topics: '{self.topics_consumed_list}'.")
+            log.info(f"Kafka consumer subscribed to topics: '{self.topics_consumed_list}'.")
         except Exception as e:
-            add_to_log(f"Error: Kafka consumer subscribtion to topics: '{self.topics_consumed_list}' " +
-                       f"failed with message: '{e}'.")
+            log.info(f"Kafka consumer subscribtion to topics: '{self.topics_consumed_list}' " +
+                     f"failed with message: '{e}'.")
             sys.exit(1)
 
-    # Method: Verify if topics exist in Kafka Brooker.
+    # Method: Verify if topics exists.
     def verify_topic_existence(self):
+        log.debug("Verifying if topics {self.topic_list} exist via Kakfa brooker.")
         unavbl_topics = []
         for topic in self.topic_list:
             try:
                 if topic not in self.consumer.topics():
                     unavbl_topics.append(topic)
             except Exception as e:
-                add_to_log(f"Error: Verifying if topic: '{topic}' exists failed with message: '{e}'.")
+                log.exception(f"Verifying if topic: '{topic}' exists failed with message: '{e}'.")
                 sys.exit(1)
 
         if unavbl_topics:
-            add_to_log(f"Error: The Topic(s): {unavbl_topics} does not exist.")
+            log.error(f"The Topic(s): {unavbl_topics} does not exist.")
             sys.exit(1)
+        else:
+            log.debug("All topics exist.")
 
     # Method: Create a dictionary with partitions availiable for each topic.
     def create_topic_partitions_dict(self):
+        log.debug("Creating topic partitions dictionary")
         if type(self.topic_list) != list:
-            add_to_log(f"Error: Supplied topics must have the type 'list' but is {type(self.topic_list)}")
+            log.error(f"Supplied topics must have the type 'list' but is {type(self.topic_list)}")
             sys.exit(1)
 
         topic_partitions_dict = {}
@@ -133,41 +182,49 @@ class KafkaHelper:
             for topic in self.topic_list:
                 topic_partitions_dict[topic] = [TopicPartition(topic, p)
                                                 for p in self.consumer.partitions_for_topic(topic)]
+            log.debug("Created topic partitions dictionary")
         except Exception as e:
-            add_to_log(f"Error: Making dictionary of lists for topic partitions for topic: '{topic}' " +
-                       f"failed with message: '{e}'.")
+            log.exception(f"Making dictionary of lists for topic partitions for topic: '{topic}' " +
+                          f"failed with message: '{e}'.")
             sys.exit(1)
 
         return topic_partitions_dict
 
     # Method: Create a dictionary with topic partition --> begin offsets
     def create_topic_partitions_begin_offsets_dict(self):
+        log.debug("Creating dictionary with: topic partitions -> begin offsets.")
         begin_offset_topic_partitions_dict = {}
 
         try:
             for topic in self.topic_list:
                 begin_offset_topic_partitions_dict[topic] = self.consumer.beginning_offsets([TopicPartition(topic, p) for p in self.consumer.partitions_for_topic(topic)])
+            log.debug("Created dictionary.")
         except Exception as e:
-            add_to_log(f"Error: Getting latest offset for partitions for topic: '{topic}' failed with message '{e}'.")
+            log.exception(f"Getting latest offset for partitions for topic: '{topic}' failed with message '{e}'.")
             sys.exit(1)
 
         return begin_offset_topic_partitions_dict
 
     # Method: Create a dictionary with topic partition --> end offsets
     def create_topic_partitions_end_offsets_dict(self):
+        log.debug("Creating dictionary with: topic partitions -> end offsets.")
         end_offset_topic_partitions_dict = {}
+
         try:
             for topic in self.topic_list:
                 end_offset_topic_partitions_dict[topic] = self.consumer.end_offsets([TopicPartition(topic, p) for p in self.consumer.partitions_for_topic(topic)])
+            log.debug("Created dictionary.")
         except Exception as e:
-            add_to_log(f"Error: Getting end offset for partitions for topic: '{topic}' failed with message: '{e}'.")
+            log.exception(f"Getting end offset for partitions for topic: '{topic}' failed with message: '{e}'.")
             sys.exit(1)
 
         return end_offset_topic_partitions_dict
 
     # Method: Create a dictionary with topic partition --> last read offset
     def create_topic_partitions_last_read_offset_dict(self):
+        log.debug("Creating dictionary with: topic partitions -> last read offsets.")
         # TODO verify if this works for empty topic (works with minus 1?)
+        # TODO make with position instead
 
         topic_partitions_dict = self.create_topic_partitions_dict()
         last_read_offset_topic_partitions_dict = self.create_topic_partitions_begin_offsets_dict()
@@ -194,32 +251,30 @@ class KafkaHelper:
     # Method: list empty topics
     def list_empty_topics(self, topic_list):
         topic_partitions_dict = self.create_topic_partitions_dict()
+        begin_offset_topic_partitions_dict = self.create_topic_partitions_begin_offsets_dict()
         end_offset_topic_partitions_dict = self.create_topic_partitions_end_offsets_dict()
 
-        empty_topics = topic_list
+        empty_topics = topic_list.copy()
 
         for topic in topic_list:
             # loop all partitions for topic
             for topic_partition in topic_partitions_dict[topic]:
-                if end_offset_topic_partitions_dict[topic][topic_partition] > 0:
+                if end_offset_topic_partitions_dict[topic][topic_partition] > begin_offset_topic_partitions_dict[topic][topic_partition]:
                     empty_topics.remove(topic)
 
         return empty_topics
 
     # Method: list empty consumed only topics
     def list_empty_consumed_only_topics(self):
-        empty_topics = self.list_empty_topics(self.topics_consumed_only)
-        return empty_topics
+        return self.list_empty_topics(self.topics_consumed_only)
 
     # Method: list empty produced only topics
     def list_empty_produced_only_topics(self):
-        empty_topics = self.list_empty_topics(self.topics_produced_only)
-        return empty_topics
+        return self.list_empty_topics(self.topics_produced_only)
 
     # Method: list empty consuemd and produced topics
     def list_empty_consumed_and_produced_topics(self):
-        empty_topics = self.list_empty_topics(self.topics_consumed_and_produced)
-        return empty_topics
+        return self.list_empty_topics(self.topics_consumed_and_produced)
 
     # Method: Seek partitions to latest availiable message
     def seek_topic_partitions_latest(self):
@@ -238,7 +293,7 @@ class KafkaHelper:
                         offset = end_offset_topic_partitions_dict[topic][topic_partition]-1
                         self.consumer.seek(partition, offset)
         except Exception as e:
-            add_to_log(f"Error: Seeking consumer: '{partition}' to offset: {offset} failed with message '{e}'.")
+            log.exception(f"Seeking consumer: '{partition}' to offset: {offset} failed with message '{e}'.")
             sys.exit(1)
 
     # Method: Get latest message value per topic and return it in dictionary - using poll
@@ -345,7 +400,7 @@ class KafkaHelper:
         topic_latest_message_value_dict = self.get_latest_topic_messages_to_dict_poll_based()
 
         if topic_latest_message_value_dict[topic_name] is None:
-            add_to_log("Error: Message is not avialiable from topic: '{topic_name}'")
+            log.exception("Message is not avialiable from topic: '{topic_name}'")
             sys.exit(1)
         else:
             message = topic_latest_message_value_dict[topic_name]
@@ -358,8 +413,8 @@ class KafkaHelper:
         topic_latest_message_value_dict = self.get_latest_topic_messages_to_dict_poll_based()
 
         if topic_latest_message_value_dict[topic_name][msg_val_name] is None:
-            add_to_log(f"Warning: Value: {msg_val_name} is not avialiable from topic: " +
-                       f"'{topic_name}'. Setting to default value: '{default_msg_val}'.")
+            log.warning(f"Value: {msg_val_name} is not avialiable from topic: " +
+                        f"'{topic_name}'. Setting to default value: '{default_msg_val}'.")
             message_value = default_msg_val
         else:
             message_value = topic_latest_message_value_dict[topic_name][msg_val_name]
@@ -369,32 +424,83 @@ class KafkaHelper:
 
         return message_value
 
-    # Method: get latest message values from alle consumed topics and return
-    def get_latest_msg_from_consumed_topics_to_dict(self):
-        # TODO add possibility of setting default value?
-        # TODO make possibility of continuiing via flag if topic empty (will return none...)
-        topic_latest_message_value_dict = self.get_latest_topic_messages_to_dict_poll_based()
-        # topic_latest_message_value_dict = self.get_latest_topic_messages_to_dict_loop_based()
-
-        """
-        empty_topics = []
-        for topic in topic_latest_message_value_dict:
-            if topic_latest_message_value_dict[topic] is None:
-                empty_topics.append(topic)
-        if empty_topics:
-            add_to_log(f"Warning: No data was availiable on consumed Kafka Topic(s): {empty_topics}.")
-            # sys.exit(1)
-        """
-
-        return topic_latest_message_value_dict
-
     # Method: Produce message to topic
     def produce_message(self, topic_name, msg_value):
         # TODO doc
         # TODO verify if topic name is in producer list? (if not then what?)
+
         try:
             self.producer.send(topic_name, value=msg_value)
             return True
         except Exception as e:
-            add_to_log(f"Error: Sending message to Kafka failed with message: '{e}'.")
+            log.exception(f"Sending message to Kafka failed with message: '{e}'.")
             sys.exit(1)
+
+    # Method: latest kafka to Pandas
+    def get_latest_messages_to_pandas_dataframe(self):
+        time_begin = time()
+
+        # init dictionary with Topic -> TopicPartitions
+        topic_partitions_dict = self.create_topic_partitions_dict()
+
+        # data lists
+        msg_topic = []
+        msg_partition = []
+        msg_offset = []
+        msg_timestamp = []
+        msg_key = []
+        msg_val = []
+
+        # poll data
+        is_polling = True
+        while is_polling:
+
+            data_object = self.consumer.poll(timeout_ms=self.poll_timeout_ms, max_records=None)
+
+            if data_object:
+
+                # loop all messages returned by poll per partition
+                for topic_partition in data_object:
+                    # loop all messages for partition
+                    for msg in range(0, len(data_object[topic_partition])):
+                        # TODO check if looping is needed, cant it be parsed smarter
+                        msg_topic.append(data_object[topic_partition][msg].topic)
+                        msg_partition.append(data_object[topic_partition][msg].partition)
+                        msg_offset.append(data_object[topic_partition][msg].offset)
+                        msg_timestamp.append(data_object[topic_partition][msg].timestamp)
+
+                        encoded_key = data_object[topic_partition][msg].key
+                        if encoded_key is None:
+                            decoded_key = "NA"
+                        else:
+                            decoded_key = loads(data_object[topic_partition][msg].key.decode())
+
+                        msg_key.append(decoded_key)
+                        msg_val.append(data_object[topic_partition][msg].value)
+
+            # Make list of partitions for which last message offset has not yet been reached
+            # TODO make as function
+            topic_partitions_not_reached_last_offset = []
+            for topic in self.topics_consumed_list:
+                for topic_partition in topic_partitions_dict[topic]:
+                    if self.consumer.position(topic_partition) < self.consumer.end_offsets([topic_partition])[topic_partition]-1:
+                        topic_partitions_not_reached_last_offset.append(topic_partition)
+
+            # If all partitions have been consumed till latest offset, break out of polling loop
+            if len(topic_partitions_not_reached_last_offset) == 0:
+                is_polling = False
+
+        data_dict = {'topic': msg_topic, 'partition': msg_partition, 'offset': msg_offset, 'timestamp': msg_timestamp, 'key': msg_key, 'value': msg_val}
+        dataframe = pd.DataFrame.from_dict(data_dict)
+
+        log.info(f"it took {time()-time_begin}")
+        return dataframe
+
+
+# config of logging settings
+# TODO: read logging level from ENV var
+def config_logging():
+    logging.basicConfig(format='%(asctime)s %(levelname)-4s %(name)s: %(message)s',
+                        level=logging.INFO,
+                        datefmt='%Y-%m-%d %H:%M:%S.%03d')
+    logging.getLogger().setLevel(logging.INFO)

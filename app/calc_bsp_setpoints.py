@@ -1,22 +1,28 @@
 # Import dependencies
 from time import sleep, time
+import logging
 from json import loads
 
 # Import functions
-from functions_kafka_class import KafkaHelper
-from functions_lfc import add_to_log
+from singukafka import KafkaHelper, config_logging
 
 # Import parameters, Kafka topic names and message value names
 import parm_kafka_topic_nm as tp_nm
 import parm_kafka_msg_val_nm as msg_val_nm
-import parm_general as PARM
 
+# constants
+PRECISION_DECIMALS = 2
+
+# Initialize log
+log = logging.getLogger(__name__)
+config_logging()
 """
 TODO:
+- BSP simulering skal tage sum af setpoints frem for P_target (og noget sum af loop hastigheder?)
 - byg visning ind af om bud er aktiv (som ny tabel eller blot visning i act bsp)
 - brug kafka helper alle steder
+- brug logging
 - check if topics which are both produced and consumed are empty, else init (funktion som gør det og melder hvis nogle ikke sættes)
-- BSP simulering skal tage sum af setpoints frem for P_target (eller hverfald noget sum af loop hastigheder?)
 - Dokumenter classes ordentligt
 - brug non root user i dockerfile som vku
 - Lav kafka topics som env vars
@@ -61,11 +67,11 @@ class BSP:
     # methods
     # - set setpint
     def set_setpoint(self, setpoint):
-        self.setpoint = round(setpoint, PARM.PRECISION_DECIMALS)
+        self.setpoint = round(setpoint, PRECISION_DECIMALS)
 
     # - set setpint
     def add_to_setpoint(self, setpoint):
-        self.setpoint += round(setpoint, PARM.PRECISION_DECIMALS)
+        self.setpoint += round(setpoint, PRECISION_DECIMALS)
 
 
 # Bid class blueprint
@@ -129,14 +135,14 @@ class LMOLHandler():
             # extract up regualtion bids and sort list by cheapest price
             self.bid_candidates = [i for i in self.bid_list if (i.direction == 'UP')]
             self.bid_candidates.sort(key=lambda x: x.price, reverse=False)
-            add_to_log(f"Info: {abs(p_target)} MW up regulation needed.")
+            log.info(f"{abs(p_target)} MW up regulation needed.")
         elif self.p_target < 0:
             # extract up regualtion bids and sort list by cheapest price
             self.bid_candidates = [i for i in self.bid_list if (i.direction == 'DOWN')]
             self.bid_candidates.sort(key=lambda x: x.price, reverse=False)
-            add_to_log(f"Info: {abs(p_target)} MW down regulation needed.")
+            log.info(f"{abs(p_target)} MW down regulation needed.")
         else:
-            add_to_log(f"Info: No regulation needed. Target is {p_target}.")
+            log.info(f"No regulation needed. Target is {p_target}.")
 
     def bsp_func(self):
 
@@ -147,14 +153,14 @@ class LMOLHandler():
         if self.bid_candidates:
             availiable_regulation = 0
 
-            remaning_regulation = round(abs(self.p_target), PARM.PRECISION_DECIMALS)
+            remaning_regulation = round(abs(self.p_target), PRECISION_DECIMALS)
             for bid in self.bid_candidates:
 
-                # add_to_log(f"Info: BSP bid '{bid.mrid_bid}' from {bid.name} neeeded.")
+                # log.info(f"BSP bid '{bid.mrid_bid}' from {bid.name} neeeded.")
                 bid.activate_bid()
 
                 availiable_regulation += bid.capacity
-                setpoint = round((min(remaning_regulation, bid.capacity)), PARM.PRECISION_DECIMALS)
+                setpoint = round((min(remaning_regulation, bid.capacity)), PRECISION_DECIMALS)
                 remaning_regulation -= setpoint
                 # add setpoint to bsp_mrid
                 # TODO make smarter
@@ -188,10 +194,9 @@ if __name__ == "__main__":
                             auto_offset_reset="earliest",
                             enable_auto_commit=False,
                             topics_consumed_list=topics_consumed_list,
-                            topics_produced_list=topics_produced_list,
-                            poll_timeout_ms=PARM.TIMEOUT_MS_POLL)
+                            topics_produced_list=topics_produced_list)
 
-    add_to_log("Info: Activating BSP in merit order based on LMOL and P_target..")
+    log.info("Activating BSP in merit order based on LMOL and P_target..")
 
     while True:
         # refresh rate
@@ -201,13 +206,13 @@ if __name__ == "__main__":
         time_loop_start = time()
 
         # get latest messages from consumed topics
-        msg_val_dict = kafka_obj.get_latest_msg_from_consumed_topics_to_dict()
-        # add_to_log(f"Debug: Getting messages took: {round(time()-time_loop_start,3)} secounds.")
+        msg_val_dict = kafka_obj.get_latest_topic_messages_to_dict_poll_based()
+        log.debug(f"Getting messages took: {round(time()-time_loop_start,3)} secounds.")
 
         # check if consumed only data is availiable and wait if not, else do it
         empty_consumed_only_topics = kafka_obj.list_empty_consumed_only_topics()
         if empty_consumed_only_topics:
-            add_to_log(f"Warning: The consumed only topics: {empty_consumed_only_topics} are empty. Waiting for input data.")
+            log.warning(f"The consumed only topics: {empty_consumed_only_topics} are empty. Waiting for input data.")
             sleep(1)
 
         else:
@@ -234,4 +239,4 @@ if __name__ == "__main__":
                 kafka_obj.produce_message(topic_name=tp_nm.lfc_bsp_activated,
                                           msg_value={msg_val_nm.lfc_bsp_activated: [bsp.__dict__ for bsp in bsp_setpoint_list]})
 
-                # add_to_log(f"Debug: BSP activation done in: {round(time()-time_loop_start,3)} secounds.")
+                # log.debug(f"BSP activation done in: {round(time()-time_loop_start,3)} secounds.")

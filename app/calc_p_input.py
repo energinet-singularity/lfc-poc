@@ -1,19 +1,26 @@
 # Import dependencies
 from time import sleep, time
 from datetime import datetime
+import logging
 
 # Import functions
-from functions_kafka_class import KafkaHelper
-from functions_lfc import add_to_log
+from singukafka import KafkaHelper, config_logging
 
 # Import parameters, Kafka topic names and message value names
 import parm_kafka_topic_nm as tp_nm
 import parm_kafka_msg_val_nm as msg_val_nm
-import parm_general as PARM
+
+# constants
+PRECISION_DECIMALS = 2
+REFRESH_RATE_MS_LFC_INPUT = 100
+
+# Initialize log
+log = logging.getLogger(__name__)
+config_logging()
 
 if __name__ == "__main__":
 
-    add_to_log("Info: LFC p_input calculation initializing..")
+    log.info("LFC p_input calculation initializing..")
 
     # Create lists of topic names which are consumed and produced
     topics_produced_list = [tp_nm.lfc_p_input_calc_state, tp_nm.lfc_p_input]
@@ -25,13 +32,12 @@ if __name__ == "__main__":
                             auto_offset_reset="earliest",
                             enable_auto_commit=False,
                             topics_consumed_list=topics_consumed_list,
-                            topics_produced_list=topics_produced_list,
-                            poll_timeout_ms=PARM.TIMEOUT_MS_POLL)
+                            topics_produced_list=topics_produced_list)
 
     # Set booleam value used to determine if first loop of function
     is_first_loop = True
 
-    add_to_log("Info: Calculating LFC p_input when p_demand or p_correction changes....")
+    log.info("Calculating LFC p_input when p_demand or p_correction changes....")
 
     # loop to calculate p_input (sum of p_demand and p_correction) and send to kafka, if p_demand and/or p_correction changed
     while True:
@@ -42,7 +48,7 @@ if __name__ == "__main__":
         empty_consumed_and_produced_topics = kafka_obj.list_empty_consumed_and_produced_topics()
         for topic in empty_consumed_and_produced_topics:
             if topic == tp_nm.lfc_p_input_calc_state:
-                add_to_log(f"Info: Topic {topic} was empty. Initialised with default value.")
+                log.info(f"Topic {topic} was empty. Initialised with default value.")
                 kafka_obj.produce_message(topic_name=tp_nm.lfc_p_input_calc_state,
                                           msg_value={'Timestamp': str(datetime.now()),
                                                      msg_val_nm.last_lfc_p_dem: 0,
@@ -53,10 +59,10 @@ if __name__ == "__main__":
         empty_consumed_only_topics = kafka_obj.list_empty_consumed_only_topics()
         if empty_consumed_only_topics:
             sleep(1)
-            add_to_log(f"Warning: The consumed only topics: {empty_consumed_only_topics} are empty. Waiting for input data.")
+            log.warning(f"The consumed only topics: {empty_consumed_only_topics} are empty. Waiting for input data.")
         else:
             # get latest messages from consumed topics
-            msg_val_dict = kafka_obj.get_latest_msg_from_consumed_topics_to_dict()
+            msg_val_dict = kafka_obj.get_latest_topic_messages_to_dict_poll_based()
             # add_to_log(f"Debug: Getting messages took: {round(time()-time_loop_start,3)} secounds.")
 
             current_lfc_p_corr = msg_val_dict[tp_nm.lfc_p_corr][msg_val_nm.lfc_p_corr]
@@ -72,23 +78,23 @@ if __name__ == "__main__":
 
                 # Log if demand changed or remained the same
                 if last_lfc_p_dem == current_lfc_p_dem:
-                    add_to_log(f"Info: LFC p_demand is still: {current_lfc_p_dem}")
+                    log.debug(f"LFC p_demand is still: {current_lfc_p_dem}")
                 else:
-                    add_to_log(f"Info: LFC p_demand changed to: {current_lfc_p_dem} from: {last_lfc_p_dem}")
+                    log.info(f"LFC p_demand changed to: {current_lfc_p_dem} from: {last_lfc_p_dem}")
 
                 # Log if correction changed or remained the same
                 if last_lfc_p_corr == current_lfc_p_corr:
-                    add_to_log(f"Info: LFC p_correction is still: {current_lfc_p_corr}")
+                    log.debug(f"LFC p_correction is still: {current_lfc_p_corr}")
                 else:
-                    add_to_log(f"Info: LFC p_correction changed to: {current_lfc_p_corr} from: {last_lfc_p_corr}")
+                    log.info(f"LFC p_correction changed to: {current_lfc_p_corr} from: {last_lfc_p_corr}")
 
                 # Save cycle start time
                 time_current_calc_start = datetime.now()
 
                 # Calculate LFC p_input as a sum of p_demand and p_correction
-                lfc_p_input = round(current_lfc_p_dem + current_lfc_p_corr, PARM.PRECISION_DECIMALS)
+                lfc_p_input = round(current_lfc_p_dem + current_lfc_p_corr, PRECISION_DECIMALS)
 
-                add_to_log(f"Info: LFC p_input is now: {lfc_p_input}")
+                log.info(f"LFC p_input is now: {lfc_p_input}")
 
                 # Send LFC p_input to kafka
                 kafka_obj.produce_message(topic_name=tp_nm.lfc_p_input,
@@ -101,9 +107,9 @@ if __name__ == "__main__":
                                                      msg_val_nm.last_lfc_p_corr: current_lfc_p_corr,
                                                      msg_val_nm.lfc_p_input: lfc_p_input})
 
-                add_to_log(f"Debug: LFC p_input calculation done in: {round(time()-time_loop_start,3)} secounds.")
+                log.debug(f"LFC p_input calculation done in: {round(time()-time_loop_start,3)} secounds.")
 
             is_first_loop = False
 
             # Sleep before next loop
-            sleep(PARM.REFRESH_RATE_MS_LFC_INPUT/1000)
+            sleep(REFRESH_RATE_MS_LFC_INPUT/1000)

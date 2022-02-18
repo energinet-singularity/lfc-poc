@@ -1,17 +1,18 @@
 # Import depedencies
 from prettytable import PrettyTable
 from time import sleep, time
+from datetime import datetime
 from json import loads
 
 # Import functions
-from functions_kafka_class import KafkaHelper
-from functions_lfc import add_to_log, print_lfc_logo_doh
+from singukafka import KafkaHelper
 
 # Import parameters, Kafka topic names and message value names
 import parm_kafka_topic_nm as tp_nm
 import parm_kafka_msg_val_nm as msg_val_nm
-import parm_general as PARM
 
+
+# init tables
 lfc_table = PrettyTable()
 lfc_table.field_names = ["", "Value [MW]", "Description"]
 
@@ -20,6 +21,33 @@ bid_table.field_names = ["mrid_bsp", "mrid_bid", "name", "direction", "price", "
 
 bsp_table = PrettyTable()
 bsp_table.field_names = ["BSP", "Setpoint [MW]"]
+
+
+# art
+def print_lfc_logo_doh():
+    """
+    Prints a ASCII-art LFC logo to terminal.
+    """
+    lfc_logo = """
+LLLLLLLLLLL                  FFFFFFFFFFFFFFFFFFFFFF             CCCCCCCCCCCCC
+L:::::::::L                  F::::::::::::::::::::F          CCC::::::::::::C
+L:::::::::L                  F::::::::::::::::::::F        CC:::::::::::::::C
+LL:::::::LL                  FF::::::FFFFFFFFF::::F       C:::::CCCCCCCC::::C
+  L:::::L                      F:::::F       FFFFFF      C:::::C       CCCCCC
+  L:::::L                      F:::::F                  C:::::C
+  L:::::L                      F::::::FFFFFFFFFF        C:::::C
+  L:::::L                      F:::::::::::::::F        C:::::C
+  L:::::L                      F:::::::::::::::F        C:::::C
+  L:::::L                      F::::::FFFFFFFFFF        C:::::C
+  L:::::L                      F:::::F                  C:::::C
+  L:::::L         LLLLLL       F:::::F                   C:::::C       CCCCCC
+LL:::::::LLLLLLLLL:::::L     FF:::::::FF                  C:::::CCCCCCCC::::C
+L::::::::::::::::::::::L     F::::::::FF                   CC:::::::::::::::C
+L::::::::::::::::::::::L     F::::::::FF                     CCC::::::::::::C
+LLLLLLLLLLLLLLLLLLLLLLLL     FFFFFFFFFFF                        CCCCCCCCCCCCC
+    """
+    print(lfc_logo)
+
 
 if __name__ == "__main__":
 
@@ -33,8 +61,7 @@ if __name__ == "__main__":
     kafka_obj = KafkaHelper(group_id="None",
                             auto_offset_reset="earliest",
                             enable_auto_commit=False,
-                            topics_consumed_list=topics_consumed_list,
-                            poll_timeout_ms=PARM.TIMEOUT_MS_POLL)
+                            topics_consumed_list=topics_consumed_list)
 
     while True:
 
@@ -46,7 +73,7 @@ if __name__ == "__main__":
         time_loop_start = time()
 
         # get latest messages from consumed topics
-        msg_val_dict = kafka_obj.get_latest_msg_from_consumed_topics_to_dict()
+        msg_val_dict = kafka_obj.get_latest_topic_messages_to_dict_poll_based()
 
         # LFC data
         table_row_dict = [{"tp_nm": tp_nm.lfc_pbr_response,
@@ -124,6 +151,6 @@ if __name__ == "__main__":
         print("- Activated BSP's based on bids -")
         print(bsp_table)
 
-        add_to_log("")
+        print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
 
-        sleep(0.5)
+        sleep(1)
