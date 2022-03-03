@@ -4,7 +4,7 @@ import logging
 from json import loads
 
 # Import functions
-from singukafka import KafkaHelper, config_logging
+from singukafka import KafkaHelper
 
 # Import parameters, Kafka topic names and message value names
 import parm_kafka_topic_nm as tp_nm
@@ -12,10 +12,13 @@ import parm_kafka_msg_val_nm as msg_val_nm
 
 # constants
 PRECISION_DECIMALS = 2
+REFRESH_RATE_CALC_BSP_SETPOINTS = 1
 
 # Initialize log
 log = logging.getLogger(__name__)
-config_logging()
+logging.basicConfig(format='%(asctime)s %(levelname)-4s %(name)s: %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S.%03d')
+logging.getLogger().setLevel(logging.WARNING)
 """
 TODO:
 - BSP simulering skal tage sum af setpoints frem for P_target (og noget sum af loop hastigheder?)
@@ -199,8 +202,6 @@ if __name__ == "__main__":
     log.info("Activating BSP in merit order based on LMOL and P_target..")
 
     while True:
-        # refresh rate
-        sleep(0.1)
 
         # time of loop start
         time_loop_start = time()
@@ -213,7 +214,7 @@ if __name__ == "__main__":
         empty_consumed_only_topics = kafka_obj.list_empty_consumed_only_topics()
         if empty_consumed_only_topics:
             log.warning(f"The consumed only topics: {empty_consumed_only_topics} are empty. Waiting for input data.")
-            sleep(1)
+            sleep(REFRESH_RATE_CALC_BSP_SETPOINTS)
 
         else:
             # Get p target
@@ -240,3 +241,6 @@ if __name__ == "__main__":
                                           msg_value={msg_val_nm.lfc_bsp_activated: [bsp.__dict__ for bsp in bsp_setpoint_list]})
 
                 # log.debug(f"BSP activation done in: {round(time()-time_loop_start,3)} secounds.")
+                # refresh rate
+        
+        sleep(REFRESH_RATE_CALC_BSP_SETPOINTS)

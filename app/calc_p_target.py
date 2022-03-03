@@ -4,7 +4,7 @@ from datetime import datetime
 import logging
 
 # Import functions
-from singukafka import KafkaHelper, config_logging
+from singukafka import KafkaHelper
 
 # Import parameters, Kafka topic names and message value names
 import parm_kafka_topic_nm as tp_nm
@@ -14,6 +14,7 @@ import parm_kafka_msg_val_nm as msg_val_nm
 # TODO include as default setting instead and make possible to change
 PRECISION_DECIMALS = 2
 CYCLETIME_S_LFC = 4
+REFRESH_RATE_WAIT_FOR_KAFKA_DATA = 1
 SETPOINT_LFC_P_INPUT = 0
 KP = 0.01
 KI = 0.02
@@ -22,7 +23,9 @@ DEADBAND_LFC_ERROR = 0.5
 
 # Initialize log
 log = logging.getLogger(__name__)
-config_logging()
+logging.basicConfig(format='%(asctime)s %(levelname)-4s %(name)s: %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S.%03d')
+logging.getLogger().setLevel(logging.WARNING)
 
 
 def lfc_pid_controller(meas: float, last_error: float, last_error_sum: float, cycletime_s: float):
@@ -83,8 +86,8 @@ if __name__ == "__main__":
         # check if consumed only data is availiable and wait if not, else do it
         empty_consumed_only_topics = kafka_obj.list_empty_consumed_only_topics()
         if empty_consumed_only_topics:
-            sleep(1)
             log.warning(f"The consumed only topics: {empty_consumed_only_topics} are empty. Waiting for input data.")
+            sleep(REFRESH_RATE_WAIT_FOR_KAFKA_DATA)
         else:
             # get latest messages from consumed topics
             msg_val_dict = kafka_obj.get_latest_topic_messages_to_dict_poll_based()

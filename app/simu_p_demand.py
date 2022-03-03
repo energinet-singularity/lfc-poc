@@ -3,7 +3,7 @@ from time import sleep, time
 import logging
 
 # Import functions
-from singukafka import KafkaHelper, config_logging
+from singukafka import KafkaHelper
 
 # Import parameters, Kafka topic names and message value names
 import parm_kafka_topic_nm as tp_nm
@@ -18,7 +18,9 @@ PRECISION_DECIMALS = 2
 
 # Initialize log
 log = logging.getLogger(__name__)
-config_logging()
+logging.basicConfig(format='%(asctime)s %(levelname)-4s %(name)s: %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S.%03d')
+logging.getLogger().setLevel(logging.WARNING)
 
 
 def calc_simulated_pbr_response(p_target: float, last_pbr_response: float):

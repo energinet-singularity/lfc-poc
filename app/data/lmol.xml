@@ -6,7 +6,7 @@
         <name>DONG-W</name>
         <direction>UP</direction>
         <price>5</price>
-        <capacity>20</capacity>
+        <capacity>5</capacity>
         <availiable>True</availiable>
     </bid>
     <bid>
@@ -33,7 +33,7 @@
         <name>CENTRICA</name>
         <direction>DOWN</direction>
         <price>10</price>
-        <capacity>50</capacity>
+        <capacity>10</capacity>
         <availiable>True</availiable>
     </bid>
 </list>

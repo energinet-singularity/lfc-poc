@@ -3,6 +3,8 @@ from prettytable import PrettyTable
 from time import sleep, time
 from datetime import datetime
 from json import loads
+import os
+import logging
 
 # Import functions
 from singukafka import KafkaHelper
@@ -11,6 +13,13 @@ from singukafka import KafkaHelper
 import parm_kafka_topic_nm as tp_nm
 import parm_kafka_msg_val_nm as msg_val_nm
 
+# Initialize log
+log = logging.getLogger(__name__)
+logging.basicConfig(format='%(asctime)s %(levelname)-4s %(name)s: %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S.%03d')
+logging.getLogger().setLevel(logging.WARNING)
+
+UI_REFRESH_RATE = 1
 
 # init tables
 lfc_table = PrettyTable()
@@ -24,11 +33,7 @@ bsp_table.field_names = ["BSP", "Setpoint [MW]"]
 
 
 # art
-def print_lfc_logo_doh():
-    """
-    Prints a ASCII-art LFC logo to terminal.
-    """
-    lfc_logo = """
+LFC_LOGO = """
 LLLLLLLLLLL                  FFFFFFFFFFFFFFFFFFFFFF             CCCCCCCCCCCCC
 L:::::::::L                  F::::::::::::::::::::F          CCC::::::::::::C
 L:::::::::L                  F::::::::::::::::::::F        CC:::::::::::::::C
@@ -45,8 +50,7 @@ LL:::::::LLLLLLLLL:::::L     FF:::::::FF                  C:::::CCCCCCCC::::C
 L::::::::::::::::::::::L     F::::::::FF                   CC:::::::::::::::C
 L::::::::::::::::::::::L     F::::::::FF                     CCC::::::::::::C
 LLLLLLLLLLLLLLLLLLLLLLLL     FFFFFFFFFFF                        CCCCCCCCCCCCC
-    """
-    print(lfc_logo)
+"""
 
 
 if __name__ == "__main__":
@@ -58,19 +62,21 @@ if __name__ == "__main__":
                             tp_nm.lfc_bsp_activated]
 
     # init kafka
-    kafka_obj = KafkaHelper(group_id="None",
+    kafka_obj = KafkaHelper(group_id=None,
                             auto_offset_reset="earliest",
                             enable_auto_commit=False,
                             topics_consumed_list=topics_consumed_list)
 
     while True:
 
-        lfc_table.clear_rows()
-        bid_table.clear_rows()
-        bsp_table.clear_rows()
+        sleep(UI_REFRESH_RATE)
 
         # time of loop start
         time_loop_start = time()
+
+        lfc_table.clear_rows()
+        bid_table.clear_rows()
+        bsp_table.clear_rows()
 
         # get latest messages from consumed topics
         msg_val_dict = kafka_obj.get_latest_topic_messages_to_dict_poll_based()
@@ -134,23 +140,22 @@ if __name__ == "__main__":
             for key in data_bsp:
                 bsp_table.add_row([key["mrid"], key["setpoint"]])
 
-        # display tables
-        print_lfc_logo_doh()
-
         lfc_table.align = "l"
         lfc_table.junction_char
-        print(lfc_table)
 
         bid_table.align = "l"
         bid_table.junction_char
-        print("- Avaliable bids from LMOL -")
-        print(bid_table)
 
         bsp_table.align = "l"
         bsp_table.junction_char
-        print("- Activated BSP's based on bids -")
-        print(bsp_table)
 
-        print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
+        # os.system('cls' if os.name == 'nt' else 'clear')
 
-        sleep(1)
+        print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}: took {round((time()-time_loop_start),3)} to get data." +
+              f"{LFC_LOGO}" +
+              f"- Avaliable bids from LMOL -\n" +
+              f"{lfc_table}" +
+              f"\n- Avaliable bids from LMOL -\n" +
+              f"{bid_table}" +
+              f"\n- Activated BSP's based on bids -\n" +
+              f"{bsp_table}")

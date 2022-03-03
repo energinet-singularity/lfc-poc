@@ -6,15 +6,19 @@ import os
 import xmltodict
 
 # Import functions
-from singukafka import KafkaHelper, config_logging
+from singukafka import KafkaHelper
 
 # Import parameters, Kafka topic names and message value names
 import parm_kafka_topic_nm as tp_nm
 import parm_kafka_msg_val_nm as msg_val_nm
 
+REFRESH_RATE_PARSE_LMOL = 1
+
 # Initialize log
 log = logging.getLogger(__name__)
-config_logging()
+logging.basicConfig(format='%(asctime)s %(levelname)-4s %(name)s: %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S.%03d')
+logging.getLogger().setLevel(logging.WARNING)
 
 xml_last_modified = 0
 # TODO do not use relative path
@@ -30,7 +34,7 @@ if __name__ == "__main__":
     kafka_obj = KafkaHelper(topics_produced_list=topics_produced_list)
 
     while True:
-        sleep(1)
+        sleep(REFRESH_RATE_PARSE_LMOL)
 
         xml_modified = os.path.getmtime(xml_filepath)
 

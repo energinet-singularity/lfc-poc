@@ -9,7 +9,6 @@ import logging
 # Initialize log
 log = logging.getLogger(__name__)
 
-
 # TODO documentation
 # TODO make error handling of value name not found, for methods which get message (avro?)
 # TODO will not work if group id are used by multiple, how to check?
@@ -33,7 +32,8 @@ class KafkaHelper:
                  enable_auto_commit=False,
                  topics_consumed_list=[],
                  topics_produced_list=[],
-                 poll_timeout_ms=100):
+                 poll_timeout_ms=100,
+                 fetch_max_wait_ms=100):
 
         # attributes set on object instansiation, either by default or supplied values.
         self.group_id = group_id
@@ -42,6 +42,7 @@ class KafkaHelper:
         self.topics_consumed_list = topics_consumed_list
         self.topics_produced_list = topics_produced_list
         self.poll_timeout_ms = poll_timeout_ms
+        self.fetch_max_wait_ms = fetch_max_wait_ms
 
         # attributes set based on others
         self.topic_list = list(set(self.topics_produced_list + self.topics_consumed_list))
@@ -57,12 +58,13 @@ class KafkaHelper:
         # methods called to init attributes
         self.set_kafka_brooker_from_env()
         self.init_consumer()
+        self.verify_topic_existence()
         if topics_consumed_list:
             self.subscribe_topics()
         if topics_produced_list:
             self.init_producer()
-        self.verify_topic_existence()
-        # TODO move this init to seek function only ?
+
+        # TODO move this init to seek function only ? (DUMMY POLL INIT, only call once or jsut always call before seek?)
         self.init_topic_partitions()
 
     # Method: set kafka brooker from ENV or default to value
@@ -84,7 +86,7 @@ class KafkaHelper:
                                           value_deserializer=lambda x: loads(x.decode('utf-8')),
                                           auto_offset_reset=self.auto_offset_reset,
                                           enable_auto_commit=self.enable_auto_commit,
-                                          fetch_max_wait_ms=100)
+                                          fetch_max_wait_ms=self.fetch_max_wait_ms)
             log.info("Kafka consumer connection established.")
         except Exception as e:
             log.exception(f"Kafka Consumer connection failed with message: '{e}'.")
@@ -102,41 +104,43 @@ class KafkaHelper:
             log.exception(f"Kafka producer connection failed with message: '{e}'.")
             sys.exit(1)
 
-    # Method: Dummy Poll, which is needed to force assignment of partitions after subsribtion to topics.
+    # Method: Dummy Poll, which is needed to force assignment of partitions after subsribtion to topics. (only needed when using seek method)
     def init_topic_partitions(self):
         log.debug("Initiliasing topic partitions assignemnt.")
         # TODO check if using a dummy poll is the correct way, maybe also consumer loop could work?
         # TODO handle that when making dummy poll, if auto comit is enabled, then the offset will shift unessecary? (fix by using position and seek)
         try:
-            self.consumer.poll(timeout_ms=self.poll_timeout_ms)
-            log.info("Initial poll done. TopicPartitions are now assigned.")
+            self.consumer.poll(timeout_ms=self.poll_timeout_ms, max_records=1)
+            log.debug("Initial poll done. TopicPartitions are now assigned.")
         except Exception as e:
             log.exception(f"Initial poll failed with message '{e}'.")
             sys.exit(1)
         """
-        if len(kafka_obj.list_empty_consumed_only_topics()) == 10:
+        if len(kafka_obj.list_empty_consumed_only_topics()) == 0:
             try:
                 for message in kafka_obj.consumer:
                     break
                 kafka_obj.consumer.seek(partition=TopicPartition(message.topic, message.partition),offset=message.offset)
+                log.info("TopicPartitions assigned via loop.")
             except Exception as e:
                 log.exception(f"?? failed with message '{e}'.")
                 sys.exit(1)
         else:
             try:
-                kafka_obj.consumer.poll()
+                data = kafka_obj.consumer.poll()
 
                 if self.auto_offset_reset == 'earliest':
                     self.consumer.seek_to_beginning()
                 elif self.auto_offset_reset == 'latest':
-                    # TODO handle this how?
+                    # TODO handle this how? (via position som gemmes før poll)
                     pass
 
-                log.info("Initial poll done. TopicPartitions are now assigned.")
+                log.info("TopicPartitions assigned via Poll.")
 
             except Exception as e:
                 log.exception(f"Initial poll failed with message '{e}'.")
                 sys.exit(1)
+
 
         # kafka_obj.seek_topic_partitions_latest()
         """
@@ -223,6 +227,7 @@ class KafkaHelper:
     # Method: Create a dictionary with topic partition --> last read offset
     def create_topic_partitions_last_read_offset_dict(self):
         log.debug("Creating dictionary with: topic partitions -> last read offsets.")
+        # TODO use position instead?
         # TODO verify if this works for empty topic (works with minus 1?)
         # TODO make with position instead
 
@@ -278,6 +283,7 @@ class KafkaHelper:
 
     # Method: Seek partitions to latest availiable message
     def seek_topic_partitions_latest(self):
+
         topic_partitions_dict = self.create_topic_partitions_dict()
         end_offset_topic_partitions_dict = self.create_topic_partitions_end_offsets_dict()
 
@@ -341,6 +347,7 @@ class KafkaHelper:
             topic_partitions_not_reached_last_offset = []
             for topic in self.topics_consumed_list:
                 for topic_partition in topic_partitions_dict[topic]:
+                    # if self.consumer.position(topic_partition) < self.consumer.end_offsets([topic_partition])[topic_partition]-1:
                     if last_read_offset_topic_partitions_dict[topic][topic_partition] < end_offset_topic_partitions_dict[topic][topic_partition]-1:
                         topic_partitions_not_reached_last_offset.append(topic_partition)
 
@@ -437,6 +444,8 @@ class KafkaHelper:
             sys.exit(1)
 
     # Method: latest kafka to Pandas
+    # TODO: add such that it updates latest msg to attribute, then make function which extract from it and recalls it
+    # TODO: build in timeout?
     def get_latest_messages_to_pandas_dataframe(self):
         time_begin = time()
 
@@ -493,14 +502,5 @@ class KafkaHelper:
         data_dict = {'topic': msg_topic, 'partition': msg_partition, 'offset': msg_offset, 'timestamp': msg_timestamp, 'key': msg_key, 'value': msg_val}
         dataframe = pd.DataFrame.from_dict(data_dict)
 
-        log.info(f"it took {time()-time_begin}")
+        log.info(f"kafka to panda took {time()-time_begin}")
         return dataframe
-
-
-# config of logging settings
-# TODO: read logging level from ENV var
-def config_logging():
-    logging.basicConfig(format='%(asctime)s %(levelname)-4s %(name)s: %(message)s',
-                        level=logging.INFO,
-                        datefmt='%Y-%m-%d %H:%M:%S.%03d')
-    logging.getLogger().setLevel(logging.INFO)

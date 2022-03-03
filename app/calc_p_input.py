@@ -4,7 +4,7 @@ from datetime import datetime
 import logging
 
 # Import functions
-from singukafka import KafkaHelper, config_logging
+from singukafka import KafkaHelper
 
 # Import parameters, Kafka topic names and message value names
 import parm_kafka_topic_nm as tp_nm
@@ -12,11 +12,13 @@ import parm_kafka_msg_val_nm as msg_val_nm
 
 # constants
 PRECISION_DECIMALS = 2
-REFRESH_RATE_MS_LFC_INPUT = 100
+REFRESH_RATE_CALC_P_INPUT = 1
 
 # Initialize log
 log = logging.getLogger(__name__)
-config_logging()
+logging.basicConfig(format='%(asctime)s %(levelname)-4s %(name)s: %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S.%03d')
+logging.getLogger().setLevel(logging.WARNING)
 
 if __name__ == "__main__":
 
@@ -58,8 +60,8 @@ if __name__ == "__main__":
         # check if consumed only data is availiable and wait if not, else do it
         empty_consumed_only_topics = kafka_obj.list_empty_consumed_only_topics()
         if empty_consumed_only_topics:
-            sleep(1)
             log.warning(f"The consumed only topics: {empty_consumed_only_topics} are empty. Waiting for input data.")
+            sleep(REFRESH_RATE_CALC_P_INPUT)
         else:
             # get latest messages from consumed topics
             msg_val_dict = kafka_obj.get_latest_topic_messages_to_dict_poll_based()
@@ -112,4 +114,4 @@ if __name__ == "__main__":
             is_first_loop = False
 
             # Sleep before next loop
-            sleep(REFRESH_RATE_MS_LFC_INPUT/1000)
+            sleep(REFRESH_RATE_CALC_P_INPUT)
