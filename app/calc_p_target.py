@@ -19,7 +19,8 @@ SETPOINT_LFC_P_INPUT = 0
 KP = 0.01
 KI = 0.02
 KD = 0
-DEADBAND_LFC_ERROR = 0.5
+DEADBAND_LFC_ERROR = 0.25
+MSG_VAL_NM_LFC_TARGET_CALC_STATE = "lfc_p_target_calc_state"
 
 # Initialize log
 log = logging.getLogger(__name__)
@@ -77,6 +78,7 @@ if __name__ == "__main__":
             if topic == tp_nm.lfc_p_target_state:
                 log.info(f"Topic {topic} was empty. Initialised with default value.")
                 kafka_obj.produce_message(topic_name=tp_nm.lfc_p_target_state,
+                                          msg_key=MSG_VAL_NM_LFC_TARGET_CALC_STATE,
                                           msg_value={'Timestamp': str(datetime.now()),
                                                      msg_val_nm.lfc_p_target: 0,
                                                      msg_val_nm.lfc_p_target_error: 0,
@@ -121,6 +123,7 @@ if __name__ == "__main__":
 
             # Send state of calculation to Kakfa foir usage in enxt cycle
             kafka_obj.produce_message(topic_name=tp_nm.lfc_p_target_state,
+                                      msg_key=MSG_VAL_NM_LFC_TARGET_CALC_STATE,
                                       msg_value={'Timestamp': str(time_current_cycle_start),
                                                  msg_val_nm.lfc_p_target: lfc_p_target,
                                                  msg_val_nm.lfc_p_target_error: error,
@@ -129,6 +132,7 @@ if __name__ == "__main__":
 
             # Send LFC p_target value to topic
             kafka_obj.produce_message(topic_name=tp_nm.lfc_p_target,
+                                      msg_key=msg_val_nm.lfc_p_target,
                                       msg_value={msg_val_nm.lfc_p_target: lfc_p_target})
 
             sleep(CYCLETIME_S_LFC)

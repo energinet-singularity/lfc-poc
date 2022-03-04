@@ -9,6 +9,7 @@ import logging
 # Initialize log
 log = logging.getLogger(__name__)
 
+
 # TODO documentation
 # TODO make error handling of value name not found, for methods which get message (avro?)
 # TODO will not work if group id are used by multiple, how to check?
@@ -33,7 +34,7 @@ class KafkaHelper:
                  topics_consumed_list=[],
                  topics_produced_list=[],
                  poll_timeout_ms=100,
-                 fetch_max_wait_ms=100):
+                 fetch_max_wait_ms=200):
 
         # attributes set on object instansiation, either by default or supplied values.
         self.group_id = group_id
@@ -343,7 +344,7 @@ class KafkaHelper:
                         last_read_offset_topic_partitions_dict[topic][topic_partition] = data_object[topic_partition][msg].offset
 
             # Make list of partitions for which last message offset has not yet been reached
-            # TODO make af function (maybe sub function?)
+            # TODO use funciton topic_positions_reached_last_offsets og slet last_read_offset_topic_partitions_dict?
             topic_partitions_not_reached_last_offset = []
             for topic in self.topics_consumed_list:
                 for topic_partition in topic_partitions_dict[topic]:
@@ -389,7 +390,7 @@ class KafkaHelper:
             last_read_offset_topic_partitions_dict[message.topic][TopicPartition(message.topic, message.partition)] = message.offset
 
             # Make list of partitions for which last message offset has not yet been reached
-            # TODO make function
+            # TODO use funciton topic_positions_reached_last_offsets og slet last_read_offset_topic_partitions_dict?
             topic_partitions_not_reached_last_offset = []
             for topic in self.topics_consumed_list:
                 for topic_partition in topic_partitions_dict[topic]:
@@ -432,12 +433,12 @@ class KafkaHelper:
         return message_value
 
     # Method: Produce message to topic
-    def produce_message(self, topic_name, msg_value):
+    def produce_message(self, topic_name, msg_value, msg_key="NA"):
         # TODO doc
         # TODO verify if topic name is in producer list? (if not then what?)
 
         try:
-            self.producer.send(topic_name, value=msg_value)
+            self.producer.send(topic_name, value=msg_value, key=msg_key)
             return True
         except Exception as e:
             log.exception(f"Sending message to Kafka failed with message: '{e}'.")
@@ -445,12 +446,13 @@ class KafkaHelper:
 
     # Method: latest kafka to Pandas
     # TODO: add such that it updates latest msg to attribute, then make function which extract from it and recalls it
-    # TODO: build in timeout?
-    def get_latest_messages_to_pandas_dataframe(self):
+    # TODO: build in timeout to avopid endless polling?
+    # todo lav try/catch
+    def get_kafka_messages_to_pandas_dataframe(self, msg_key_filter=None, get_latest_msg_by_key=False, get_latest_produced_msg_only=True):
         time_begin = time()
 
-        # init dictionary with Topic -> TopicPartitions
-        topic_partitions_dict = self.create_topic_partitions_dict()
+        if not get_latest_produced_msg_only:
+            self.consumer.seek_to_beginning()
 
         # data lists
         msg_topic = []
@@ -487,20 +489,49 @@ class KafkaHelper:
                         msg_key.append(decoded_key)
                         msg_val.append(data_object[topic_partition][msg].value)
 
-            # Make list of partitions for which last message offset has not yet been reached
-            # TODO make as function
+            # check if all topic has been polled
+            if self.topic_positions_reached_last_offsets(topic_list=self.topics_consumed_list):
+                is_polling = False
+
+        # make dataframe structure
+        data_dict = {'topic': msg_topic, 'partition': msg_partition, 'offset': msg_offset, 'timestamp': msg_timestamp, 'key': msg_key, 'value': msg_val}
+        dataframe = pd.DataFrame.from_dict(data_dict)
+
+        # filter if choosen
+        if msg_key_filter is not None:
+            dataframe = self.filter_kafaka_data_frame_by_msg_key(dataframe=dataframe, msg_key_filter=msg_key_filter, filter_on_latest_msg_by_key=get_latest_msg_by_key)
+
+        log.debug(f"kafka to panda took {time()-time_begin}")
+        return dataframe
+
+    # todo lav try/catch
+    def filter_kafaka_data_frame_by_msg_key(self, dataframe, msg_key_filter, filter_on_latest_msg_by_key=False):
+        # filter by key
+        dataframe = dataframe[dataframe.key == msg_key_filter]
+        if filter_on_latest_msg_by_key:
+            # filter by latest offset
+            dataframe = dataframe[dataframe.offset == dataframe[dataframe.key == msg_key_filter]["offset"].max()]
+
+        return dataframe
+
+    # todo try catch and dok
+    def topic_positions_reached_last_offsets(self, topic_list):
+        
+        try:
+            # init dictionary with Topic -> TopicPartitions
+            topic_partitions_dict = self.create_topic_partitions_dict()
             topic_partitions_not_reached_last_offset = []
-            for topic in self.topics_consumed_list:
+            for topic in topic_list:
                 for topic_partition in topic_partitions_dict[topic]:
                     if self.consumer.position(topic_partition) < self.consumer.end_offsets([topic_partition])[topic_partition]-1:
                         topic_partitions_not_reached_last_offset.append(topic_partition)
 
             # If all partitions have been consumed till latest offset, break out of polling loop
             if len(topic_partitions_not_reached_last_offset) == 0:
-                is_polling = False
-
-        data_dict = {'topic': msg_topic, 'partition': msg_partition, 'offset': msg_offset, 'timestamp': msg_timestamp, 'key': msg_key, 'value': msg_val}
-        dataframe = pd.DataFrame.from_dict(data_dict)
-
-        log.info(f"kafka to panda took {time()-time_begin}")
-        return dataframe
+                return True
+            else:
+                return False
+        except Exception as e:
+            log.exception(f"Checking for last offset for: '{topic_partition}' failed with message '{e}'.")
+            sys.exit(1)
+        

@@ -24,7 +24,7 @@
         <name>DONG-W</name>
         <direction>DOWN</direction>
         <price>20</price>
-        <capacity>50</capacity>
+        <capacity>10</capacity>
         <availiable>True</availiable>
     </bid>
     <bid>
@@ -33,7 +33,7 @@
         <name>CENTRICA</name>
         <direction>DOWN</direction>
         <price>10</price>
-        <capacity>10</capacity>
+        <capacity>20</capacity>
         <availiable>True</availiable>
     </bid>
 </list>

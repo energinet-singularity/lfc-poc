@@ -37,7 +37,7 @@ def calc_simulated_pbr_response(p_target: float, last_pbr_response: float):
 
     """
     # When within deadband, do not ramp
-    if abs(p_target) - (DEADBAND_PBR_SIMU) < abs(last_pbr_response) < abs(p_target) + (DEADBAND_PBR_SIMU):
+    if abs(p_target) - (DEADBAND_PBR_SIMU/2) <= abs(last_pbr_response) <= abs(p_target) + (DEADBAND_PBR_SIMU/2):
         log.info("PBR did not ramp due to deadband.")
         response_pbr = last_pbr_response
     # if ramping down is needed
@@ -58,7 +58,7 @@ if __name__ == "__main__":
 
     # Create lists of topic names which are consumed and produced
     topics_produced_list = [tp_nm.lfc_p_dem, tp_nm.lfc_pbr_response]
-    topics_consumed_list = [tp_nm.lfc_p_target, tp_nm.lfc_mw_diff, tp_nm.lfc_pbr_response]
+    topics_consumed_list = [tp_nm.lfc_p_target, tp_nm.lfc_mw_diff, tp_nm.lfc_pbr_response, tp_nm.lfc_bsp_activated]
 
     # inint kafka
     consumer_gp_nm = "lfc_demand_response_simu"
@@ -86,17 +86,28 @@ if __name__ == "__main__":
             if topic == tp_nm.lfc_pbr_response:
                 log.info(f"Topic {topic} was empty. Initialised with default value.")
                 kafka_obj.produce_message(topic_name=tp_nm.lfc_pbr_response,
+                                          msg_key=msg_val_nm.lfc_pbr_response,
                                           msg_value={msg_val_nm.lfc_pbr_response: 0})
 
         # check if consumed only data is availiable
         empty_consumed_only_topics = kafka_obj.list_empty_consumed_only_topics()
 
+        # calc sum of bsp activation
+        # TODO make it properly.
+        bsp_act_dataframe = kafka_obj.get_kafka_messages_to_pandas_dataframe(msg_key_filter=msg_val_nm.lfc_bsp_activated, get_latest_msg_by_key=True, get_latest_produced_msg_only=False)
+        bsp_act_data = (bsp_act_dataframe['value'].values[0])[msg_val_nm.lfc_bsp_activated]
+        bsp_act_sum = round(sum(item['setpoint'] for item in bsp_act_data),2)
+              
+
         # p_target needs to be inint by this simulator, else LFC will not start from empty kafka (due to simulator)
+        """
         if tp_nm.lfc_p_target in empty_consumed_only_topics:
             log.info(f"Topic {tp_nm.lfc_p_target} was empty. Initialised with default value.")
             kafka_obj.produce_message(topic_name=tp_nm.lfc_p_target,
+                                      msg_key=msg_val_nm.lfc_p_target,
                                       msg_value={msg_val_nm.lfc_p_target: 0})
             empty_consumed_only_topics = kafka_obj.list_empty_consumed_only_topics()
+        """
 
         # check if consumed only data is availiable and wait if not, else do it
         if empty_consumed_only_topics:
@@ -109,7 +120,8 @@ if __name__ == "__main__":
 
             # getting values
             # TODO: Rounding?
-            current_lfc_p_target = msg_val_dict[tp_nm.lfc_p_target][msg_val_nm.lfc_p_target]
+            # current_lfc_p_target = msg_val_dict[tp_nm.lfc_p_target][msg_val_nm.lfc_p_target]
+            current_lfc_p_target = bsp_act_sum
             current_lfc_mw_diff = msg_val_dict[tp_nm.lfc_mw_diff][msg_val_nm.lfc_mw_diff]
             last_pbr_response = msg_val_dict[tp_nm.lfc_pbr_response][msg_val_nm.lfc_pbr_response]
 
@@ -121,11 +133,13 @@ if __name__ == "__main__":
 
             # Send current pbr repsonce to kafka topic
             kafka_obj.produce_message(topic_name=tp_nm.lfc_pbr_response,
+                                      msg_key=msg_val_nm.lfc_pbr_response,
                                       msg_value={msg_val_nm.lfc_pbr_response: response_pbr})
 
             # Send simulated electrical grid responce (sum of mw diff and PBR response) to kafka topic
             response_system = round(current_lfc_mw_diff+response_pbr, PRECISION_DECIMALS)
             kafka_obj.produce_message(topic_name=tp_nm.lfc_p_dem,
+                                      msg_key=msg_val_nm.lfc_p_dem,
                                       msg_value={msg_val_nm.lfc_p_dem: response_system})
             log.info(f"System response: {response_system} was send as LFC p_demand")
 

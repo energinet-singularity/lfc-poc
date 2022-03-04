@@ -24,10 +24,8 @@ TODO:
 - BSP simulering skal tage sum af setpoints frem for P_target (og noget sum af loop hastigheder?)
 - byg visning ind af om bud er aktiv (som ny tabel eller blot visning i act bsp)
 - brug kafka helper alle steder
-- brug logging
 - check if topics which are both produced and consumed are empty, else init (funktion som gør det og melder hvis nogle ikke sættes)
 - Dokumenter classes ordentligt
-- brug non root user i dockerfile som vku
 - Lav kafka topics som env vars
 - Lav table ui som message loops?
 - LMOL via file mount?
@@ -238,9 +236,10 @@ if __name__ == "__main__":
                 bsp_setpoint_list = lmol_obj.bsp_func()
 
                 kafka_obj.produce_message(topic_name=tp_nm.lfc_bsp_activated,
+                                          msg_key=msg_val_nm.lfc_bsp_activated,
                                           msg_value={msg_val_nm.lfc_bsp_activated: [bsp.__dict__ for bsp in bsp_setpoint_list]})
 
                 # log.debug(f"BSP activation done in: {round(time()-time_loop_start,3)} secounds.")
                 # refresh rate
-        
+
         sleep(REFRESH_RATE_CALC_BSP_SETPOINTS)

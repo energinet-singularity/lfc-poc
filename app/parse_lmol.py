@@ -59,6 +59,7 @@ if __name__ == "__main__":
             bid_list = dict_data["list"]["bid"]
 
             kafka_obj.produce_message(topic_name=tp_nm.lfc_bsp_lmol,
+                                      msg_key=msg_val_nm.lfc_bsp_lmol,
                                       msg_value={msg_val_nm.lfc_bsp_lmol: dumps(bid_list)})
 
             xml_last_modified = xml_modified

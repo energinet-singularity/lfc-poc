@@ -13,6 +13,7 @@ import parm_kafka_msg_val_nm as msg_val_nm
 # constants
 PRECISION_DECIMALS = 2
 REFRESH_RATE_CALC_P_INPUT = 1
+MSG_VAL_NM_LFC_INPUT_CALC_STATE = "lfc_p_input_calc_state"
 
 # Initialize log
 log = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ if __name__ == "__main__":
             if topic == tp_nm.lfc_p_input_calc_state:
                 log.info(f"Topic {topic} was empty. Initialised with default value.")
                 kafka_obj.produce_message(topic_name=tp_nm.lfc_p_input_calc_state,
+                                          msg_key=MSG_VAL_NM_LFC_INPUT_CALC_STATE,
                                           msg_value={'Timestamp': str(datetime.now()),
                                                      msg_val_nm.last_lfc_p_dem: 0,
                                                      msg_val_nm.last_lfc_p_corr: 0,
@@ -100,10 +102,12 @@ if __name__ == "__main__":
 
                 # Send LFC p_input to kafka
                 kafka_obj.produce_message(topic_name=tp_nm.lfc_p_input,
+                                          msg_key=msg_val_nm.lfc_p_input,
                                           msg_value={msg_val_nm.lfc_p_input: lfc_p_input})
 
                 # Send new state info for LFC p_input calculation to kafka
                 kafka_obj.produce_message(topic_name=tp_nm.lfc_p_input_calc_state,
+                                          msg_key=MSG_VAL_NM_LFC_INPUT_CALC_STATE,
                                           msg_value={'Timestamp': str(time_current_calc_start),
                                                      msg_val_nm.last_lfc_p_dem: current_lfc_p_dem,
                                                      msg_val_nm.last_lfc_p_corr: current_lfc_p_corr,

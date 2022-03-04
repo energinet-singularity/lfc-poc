@@ -3,7 +3,7 @@ from prettytable import PrettyTable
 from time import sleep, time
 from datetime import datetime
 from json import loads
-import os
+# import os
 import logging
 
 # Import functions
