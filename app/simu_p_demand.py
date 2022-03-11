@@ -20,7 +20,7 @@ PRECISION_DECIMALS = 2
 log = logging.getLogger(__name__)
 logging.basicConfig(format='%(asctime)s %(levelname)-4s %(name)s: %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S.%03d')
-logging.getLogger().setLevel(logging.WARNING)
+logging.getLogger().setLevel(logging.WARN)
 
 
 def calc_simulated_pbr_response(p_target: float, last_pbr_response: float):
@@ -58,7 +58,13 @@ if __name__ == "__main__":
 
     # Create lists of topic names which are consumed and produced
     topics_produced_list = [tp_nm.lfc_p_dem, tp_nm.lfc_pbr_response]
-    topics_consumed_list = [tp_nm.lfc_p_target, tp_nm.lfc_mw_diff, tp_nm.lfc_pbr_response, tp_nm.lfc_bsp_activated]
+    topics_consumed_list = [tp_nm.lfc_mw_diff, tp_nm.lfc_pbr_response, tp_nm.lfc_bsp_activated]
+    # tp_nm.lfc_p_target
+
+    # init default val
+    current_lfc_p_target = 0
+    current_lfc_mw_diff = 0
+    last_pbr_response = 0
 
     # inint kafka
     consumer_gp_nm = "lfc_demand_response_simu"
@@ -89,59 +95,42 @@ if __name__ == "__main__":
                                           msg_key=msg_val_nm.lfc_pbr_response,
                                           msg_value={msg_val_nm.lfc_pbr_response: 0})
 
-        # check if consumed only data is availiable
-        empty_consumed_only_topics = kafka_obj.list_empty_consumed_only_topics()
+        # get latest messages from consumed topics
+        # TODO function with possibility of setting default val an suppliyin latest fetched val?
+        dataframe = kafka_obj.get_kafka_messages_to_pandas_dataframe()
 
-        # calc sum of bsp activation
-        # TODO make it properly.
-        bsp_act_dataframe = kafka_obj.get_kafka_messages_to_pandas_dataframe(msg_key_filter=msg_val_nm.lfc_bsp_activated, get_latest_msg_by_key=True, get_latest_produced_msg_only=False)
-        bsp_act_data = (bsp_act_dataframe['value'].values[0])[msg_val_nm.lfc_bsp_activated]
-        bsp_act_sum = round(sum(item['setpoint'] for item in bsp_act_data),2)
-              
+        value_bsp = kafka_obj.extract_value_from_kafka_dataframe(dataframe=dataframe, msg_key_filter=msg_val_nm.lfc_bsp_activated)
+        if value_bsp is not None:
+            current_lfc_p_target = round(sum(item['setpoint'] for item in value_bsp[msg_val_nm.lfc_bsp_activated]), 2)
 
-        # p_target needs to be inint by this simulator, else LFC will not start from empty kafka (due to simulator)
-        """
-        if tp_nm.lfc_p_target in empty_consumed_only_topics:
-            log.info(f"Topic {tp_nm.lfc_p_target} was empty. Initialised with default value.")
-            kafka_obj.produce_message(topic_name=tp_nm.lfc_p_target,
-                                      msg_key=msg_val_nm.lfc_p_target,
-                                      msg_value={msg_val_nm.lfc_p_target: 0})
-            empty_consumed_only_topics = kafka_obj.list_empty_consumed_only_topics()
-        """
+        value_lfc_mw_diff = kafka_obj.extract_value_from_kafka_dataframe(dataframe=dataframe, msg_key_filter=msg_val_nm.lfc_mw_diff)
+        if value_lfc_mw_diff is not None:
+            current_lfc_mw_diff = value_lfc_mw_diff[msg_val_nm.lfc_mw_diff]
 
-        # check if consumed only data is availiable and wait if not, else do it
-        if empty_consumed_only_topics:
-            sleep(1)
-            log.warning(f"The consumed only topics: {empty_consumed_only_topics} are empty. Waiting for input data.")
-        else:
-            # get latest messages from consumed topics
-            msg_val_dict = kafka_obj.get_latest_topic_messages_to_dict_poll_based()
-            # add_to_log(f"Debug: Getting messages took: {round(time()-time_loop_start,3)} secounds.")
+        value_last_pbr = kafka_obj.extract_value_from_kafka_dataframe(dataframe=dataframe, msg_key_filter=msg_val_nm.lfc_pbr_response)
+        if value_last_pbr is not None:
+            last_pbr_response = value_last_pbr[msg_val_nm.lfc_pbr_response]
 
-            # getting values
-            # TODO: Rounding?
-            # current_lfc_p_target = msg_val_dict[tp_nm.lfc_p_target][msg_val_nm.lfc_p_target]
-            current_lfc_p_target = bsp_act_sum
-            current_lfc_mw_diff = msg_val_dict[tp_nm.lfc_mw_diff][msg_val_nm.lfc_mw_diff]
-            last_pbr_response = msg_val_dict[tp_nm.lfc_pbr_response][msg_val_nm.lfc_pbr_response]
+        # Calculate simulated PBR responce
+        response_pbr = calc_simulated_pbr_response(p_target=current_lfc_p_target,
+                                                   last_pbr_response=last_pbr_response)
+        log.info(f"PBR response is: {response_pbr}")
+        log.info(f"MW_diff is: {current_lfc_mw_diff}")
 
-            # Calculate simulated PBR responce
-            response_pbr = calc_simulated_pbr_response(p_target=current_lfc_p_target,
-                                                       last_pbr_response=last_pbr_response)
-            log.info(f"PBR response is: {response_pbr}")
-            log.info(f"MW_diff is: {current_lfc_mw_diff}")
+        # Send current pbr repsonce to kafka topic
+        kafka_obj.produce_message(topic_name=tp_nm.lfc_pbr_response,
+                                  msg_key=msg_val_nm.lfc_pbr_response,
+                                  msg_value={msg_val_nm.lfc_pbr_response: response_pbr})
 
-            # Send current pbr repsonce to kafka topic
-            kafka_obj.produce_message(topic_name=tp_nm.lfc_pbr_response,
-                                      msg_key=msg_val_nm.lfc_pbr_response,
-                                      msg_value={msg_val_nm.lfc_pbr_response: response_pbr})
+        # Send simulated electrical grid responce (sum of mw diff and PBR response) to kafka topic
+        response_system = round(current_lfc_mw_diff+response_pbr, PRECISION_DECIMALS)
+        kafka_obj.produce_message(topic_name=tp_nm.lfc_p_dem,
+                                  msg_key=msg_val_nm.lfc_p_dem,
+                                  msg_value={msg_val_nm.lfc_p_dem: response_system})
+        log.info(f"System response: {response_system} was send as LFC p_demand.")
+        loop_time = round(time()-time_loop_start, 3)
+        log.info(f"Loop took {loop_time} secounds.")
 
-            # Send simulated electrical grid responce (sum of mw diff and PBR response) to kafka topic
-            response_system = round(current_lfc_mw_diff+response_pbr, PRECISION_DECIMALS)
-            kafka_obj.produce_message(topic_name=tp_nm.lfc_p_dem,
-                                      msg_key=msg_val_nm.lfc_p_dem,
-                                      msg_value={msg_val_nm.lfc_p_dem: response_system})
-            log.info(f"System response: {response_system} was send as LFC p_demand")
-
-            # sleep
-            sleep(REFRESH_RATE_S_LFC_DEM_SIMU)
+        # sleep
+        if loop_time < 1:
+            sleep(1-loop_time)

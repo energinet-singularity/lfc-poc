@@ -103,6 +103,7 @@ if __name__ == "__main__":
             """
             TODO calc cycle time baseret på seneste kørsel, hvad hvis meget lang (2xcycle time) = restart?
             TODO sleep indtil 4 sekunder gået?
+            TODO lav det som i simulator
             # if cycle time too long
             if ((time_current_cycle_start - time_last_cycle_start).total_seconds()) > 4:
                 add_to_log("LFC cycle time was not respected.")

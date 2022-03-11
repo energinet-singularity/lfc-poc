@@ -109,42 +109,19 @@ class KafkaHelper:
     def init_topic_partitions(self):
         log.debug("Initiliasing topic partitions assignemnt.")
         # TODO check if using a dummy poll is the correct way, maybe also consumer loop could work?
-        # TODO handle that when making dummy poll, if auto comit is enabled, then the offset will shift unessecary? (fix by using position and seek)
         try:
-            self.consumer.poll(timeout_ms=self.poll_timeout_ms, max_records=1)
+            # dummy poll only one message
+            data = self.consumer.poll(timeout_ms=self.poll_timeout_ms, max_records=1)
+
+            # if data returned in dummy poll, then seek partion back one offset to keep correct postion for later message processing
+            if data:
+                for topic_partition in data:
+                    self.consumer.seek(partition=topic_partition, offset=self.consumer.position(topic_partition)-1)
+
             log.debug("Initial poll done. TopicPartitions are now assigned.")
         except Exception as e:
             log.exception(f"Initial poll failed with message '{e}'.")
             sys.exit(1)
-        """
-        if len(kafka_obj.list_empty_consumed_only_topics()) == 0:
-            try:
-                for message in kafka_obj.consumer:
-                    break
-                kafka_obj.consumer.seek(partition=TopicPartition(message.topic, message.partition),offset=message.offset)
-                log.info("TopicPartitions assigned via loop.")
-            except Exception as e:
-                log.exception(f"?? failed with message '{e}'.")
-                sys.exit(1)
-        else:
-            try:
-                data = kafka_obj.consumer.poll()
-
-                if self.auto_offset_reset == 'earliest':
-                    self.consumer.seek_to_beginning()
-                elif self.auto_offset_reset == 'latest':
-                    # TODO handle this how? (via position som gemmes før poll)
-                    pass
-
-                log.info("TopicPartitions assigned via Poll.")
-
-            except Exception as e:
-                log.exception(f"Initial poll failed with message '{e}'.")
-                sys.exit(1)
-
-
-        # kafka_obj.seek_topic_partitions_latest()
-        """
 
     # Method: Subscribes consumer to topics
     def subscribe_topics(self):
@@ -225,26 +202,6 @@ class KafkaHelper:
 
         return end_offset_topic_partitions_dict
 
-    # Method: Create a dictionary with topic partition --> last read offset
-    def create_topic_partitions_last_read_offset_dict(self):
-        log.debug("Creating dictionary with: topic partitions -> last read offsets.")
-        # TODO use position instead?
-        # TODO verify if this works for empty topic (works with minus 1?)
-        # TODO make with position instead
-
-        topic_partitions_dict = self.create_topic_partitions_dict()
-        last_read_offset_topic_partitions_dict = self.create_topic_partitions_begin_offsets_dict()
-
-        for topic in self.topic_list:
-            for topic_partition in topic_partitions_dict[topic]:
-                begin_offset = last_read_offset_topic_partitions_dict[topic][topic_partition]
-                if begin_offset != 0:
-                    last_read_offset_topic_partitions_dict[topic][topic_partition] = begin_offset-1
-                elif begin_offset == 0:
-                    last_read_offset_topic_partitions_dict[topic][topic_partition] = -1
-
-        return last_read_offset_topic_partitions_dict
-
     # TODO doc Method:
     def create_topic_latest_dicts(self):
         topic_latest_message_timestamp_dict = {}
@@ -307,21 +264,11 @@ class KafkaHelper:
     def get_latest_topic_messages_to_dict_poll_based(self):
         # TODO modify this to include timeout for max time spend on polls?
 
-        # init dictionary with Topic -> TopicPartitions
-        topic_partitions_dict = self.create_topic_partitions_dict()
-
-        # init dictionary with Topic,TopicPartition -> begin_offset-1 unless 0 (used for tracking last read offset)
-        # TODO verify if this works for empty topic
-        last_read_offset_topic_partitions_dict = self.create_topic_partitions_last_read_offset_dict()
-
         # dictionaries for holding latest timestamp and value for each consumed topic
         topic_latest_message_timestamp_dict, topic_latest_message_value_dict = self.create_topic_latest_dicts()
 
         # Seek all partitions for consumed topics to latest availiable message
         self.seek_topic_partitions_latest()
-
-        # init dictionary with Topic,TopicPartition -> end_offset
-        end_offset_topic_partitions_dict = self.create_topic_partitions_end_offsets_dict()
 
         # poll data
         is_polling = True
@@ -330,7 +277,6 @@ class KafkaHelper:
             data_object = self.consumer.poll(timeout_ms=self.poll_timeout_ms, max_records=None)
 
             if data_object:
-
                 # loop all messages returned by poll per partition
                 for topic_partition in data_object:
                     # loop all messages for partition
@@ -340,20 +286,8 @@ class KafkaHelper:
                         if data_object[topic_partition][msg].timestamp > topic_latest_message_timestamp_dict[topic]:
                             topic_latest_message_timestamp_dict[topic] = data_object[topic_partition][msg].timestamp
                             topic_latest_message_value_dict[topic] = data_object[topic_partition][msg].value
-                        # update last read mesage offset dict
-                        last_read_offset_topic_partitions_dict[topic][topic_partition] = data_object[topic_partition][msg].offset
 
-            # Make list of partitions for which last message offset has not yet been reached
-            # TODO use funciton topic_positions_reached_last_offsets og slet last_read_offset_topic_partitions_dict?
-            topic_partitions_not_reached_last_offset = []
-            for topic in self.topics_consumed_list:
-                for topic_partition in topic_partitions_dict[topic]:
-                    # if self.consumer.position(topic_partition) < self.consumer.end_offsets([topic_partition])[topic_partition]-1:
-                    if last_read_offset_topic_partitions_dict[topic][topic_partition] < end_offset_topic_partitions_dict[topic][topic_partition]-1:
-                        topic_partitions_not_reached_last_offset.append(topic_partition)
-
-            # If all partitions have been consumed till latest offset, break out of polling loop
-            if len(topic_partitions_not_reached_last_offset) == 0:
+            if self.topic_positions_reached_last_offsets(topic_list=self.topics_consumed_list):
                 is_polling = False
 
         return topic_latest_message_value_dict
@@ -364,20 +298,11 @@ class KafkaHelper:
         # TODO put everything in a try catch?
         # TODO modify this to include timeout logic?
 
-        # init dictionary with Topic -> TopicPartitions
-        topic_partitions_dict = self.create_topic_partitions_dict()
-
-        # init dictionary with Topic,TopicPartition -> begin_offset-1 unless 0 (used for tracking last read offset)
-        last_read_offset_topic_partitions_dict = self.create_topic_partitions_last_read_offset_dict()
-
         # dictionaries for holding latest timestamp and value for each consumed topic
         topic_latest_message_timestamp_dict, topic_latest_message_value_dict = self.create_topic_latest_dicts()
 
         # Seek all partitions for consumed topics to latest availiable message
         self.seek_topic_partitions_latest()
-
-        # init dictionary with Topic,TopicPartition -> end_offset
-        end_offset_topic_partitions_dict = self.create_topic_partitions_end_offsets_dict()
 
         for message in self.consumer:
 
@@ -386,19 +311,8 @@ class KafkaHelper:
                 topic_latest_message_timestamp_dict[message.topic] = message.timestamp
                 topic_latest_message_value_dict[message.topic] = message.value
 
-            # update last read mesage offset
-            last_read_offset_topic_partitions_dict[message.topic][TopicPartition(message.topic, message.partition)] = message.offset
-
-            # Make list of partitions for which last message offset has not yet been reached
-            # TODO use funciton topic_positions_reached_last_offsets og slet last_read_offset_topic_partitions_dict?
-            topic_partitions_not_reached_last_offset = []
-            for topic in self.topics_consumed_list:
-                for topic_partition in topic_partitions_dict[topic]:
-                    if last_read_offset_topic_partitions_dict[topic][topic_partition] < end_offset_topic_partitions_dict[topic][topic_partition]-1:
-                        topic_partitions_not_reached_last_offset.append(topic_partition)
-
             # If all partitions have been consumed till latest offset, break out of conusmer loop
-            if len(topic_partitions_not_reached_last_offset) == 0:
+            if self.topic_positions_reached_last_offsets(topic_list=self.topics_consumed_list):
                 break
 
         return topic_latest_message_value_dict
@@ -436,6 +350,7 @@ class KafkaHelper:
     def produce_message(self, topic_name, msg_value, msg_key="NA"):
         # TODO doc
         # TODO verify if topic name is in producer list? (if not then what?)
+        # TODO add callback, since it will not fail on ie. missing brooker
 
         try:
             self.producer.send(topic_name, value=msg_value, key=msg_key)
@@ -445,86 +360,102 @@ class KafkaHelper:
             sys.exit(1)
 
     # Method: latest kafka to Pandas
-    # TODO: add such that it updates latest msg to attribute, then make function which extract from it and recalls it
+    # TODO: add such that it updates latest msg to attribute, then make function which extract from it and recalls it?
     # TODO: build in timeout to avopid endless polling?
-    # todo lav try/catch
+    # todo lav try/catch (1 eller flere)
     def get_kafka_messages_to_pandas_dataframe(self, msg_key_filter=None, get_latest_msg_by_key=False, get_latest_produced_msg_only=True):
+
         time_begin = time()
 
+        # seek consumer to begging, if all record should be fetch and not only latest produced messages only (the ones not consumed)
         if not get_latest_produced_msg_only:
             self.consumer.seek_to_beginning()
 
-        # data lists
-        msg_topic = []
-        msg_partition = []
-        msg_offset = []
-        msg_timestamp = []
-        msg_key = []
-        msg_val = []
+        # init list for holding consumer records
+        record_list = []
 
-        # poll data
+        # poll data, until last offset has been reached for all topic partitions
         is_polling = True
         while is_polling:
 
-            data_object = self.consumer.poll(timeout_ms=self.poll_timeout_ms, max_records=None)
+            # poll data from consumer and store in dictionary (topic partition --> List of consumer records)
+            topic_partition_record_dict = self.consumer.poll(timeout_ms=self.poll_timeout_ms, max_records=None)
 
-            if data_object:
+            # process data, if any returned from the poll
+            if topic_partition_record_dict:
 
-                # loop all messages returned by poll per partition
-                for topic_partition in data_object:
-                    # loop all messages for partition
-                    for msg in range(0, len(data_object[topic_partition])):
-                        # TODO check if looping is needed, cant it be parsed smarter
-                        msg_topic.append(data_object[topic_partition][msg].topic)
-                        msg_partition.append(data_object[topic_partition][msg].partition)
-                        msg_offset.append(data_object[topic_partition][msg].offset)
-                        msg_timestamp.append(data_object[topic_partition][msg].timestamp)
+                # append consumer records from all consumed topic partitions to list of consumer records
+                record_list = record_list + [record for list in topic_partition_record_dict.values() for record in list]
 
-                        encoded_key = data_object[topic_partition][msg].key
-                        if encoded_key is None:
-                            decoded_key = "NA"
-                        else:
-                            decoded_key = loads(data_object[topic_partition][msg].key.decode())
-
-                        msg_key.append(decoded_key)
-                        msg_val.append(data_object[topic_partition][msg].value)
-
-            # check if all topic has been polled
+            # stop polling when last offset has been reached for all topic partitions
             if self.topic_positions_reached_last_offsets(topic_list=self.topics_consumed_list):
                 is_polling = False
 
+        log.debug(f"Polling data took {round(time()-time_begin,3)} secounds")
+
+        # construct dictionary for storing values for consumer records
+        # TODO: check om denne oprette korrekt type wise?
+        record_dict = [{'topic': record_list[record].topic,
+                        'partition':  record_list[record].partition,
+                        'offset': record_list[record].offset,
+                        'timestamp':  record_list[record].timestamp,
+                        'key': loads(record_list[record].key.decode()),
+                        'value': record_list[record].value}
+                       for record in range(len(record_list))]
+
         # make dataframe structure
-        data_dict = {'topic': msg_topic, 'partition': msg_partition, 'offset': msg_offset, 'timestamp': msg_timestamp, 'key': msg_key, 'value': msg_val}
-        dataframe = pd.DataFrame.from_dict(data_dict)
+        time_pandas_frame = time()
+        dataframe = pd.DataFrame.from_dict(record_dict)
+        log.debug(f"Making pandas dataframe took {round(time()-time_pandas_frame,3)} secounds")
 
         # filter if choosen
+        time_filter = time()
         if msg_key_filter is not None:
-            dataframe = self.filter_kafaka_data_frame_by_msg_key(dataframe=dataframe, msg_key_filter=msg_key_filter, filter_on_latest_msg_by_key=get_latest_msg_by_key)
+            dataframe = self.filter_kafka_data_frame_by_msg_key(dataframe=dataframe, msg_key_filter=msg_key_filter, filter_on_latest_msg_by_key=get_latest_msg_by_key)
+        log.debug(f"Filtering pandas dataframe took {round(time()-time_filter,3)} secounds")
+        log.debug(f"Extracting Kafka data to pandas dataframe took {time()-time_begin}")
 
-        log.debug(f"kafka to panda took {time()-time_begin}")
         return dataframe
 
     # todo lav try/catch
-    def filter_kafaka_data_frame_by_msg_key(self, dataframe, msg_key_filter, filter_on_latest_msg_by_key=False):
-        # filter by key
-        dataframe = dataframe[dataframe.key == msg_key_filter]
-        if filter_on_latest_msg_by_key:
-            # filter by latest offset
-            dataframe = dataframe[dataframe.offset == dataframe[dataframe.key == msg_key_filter]["offset"].max()]
+    def filter_kafka_data_frame_by_msg_key(self, dataframe, msg_key_filter, filter_on_latest_msg_by_key=False):
+        if not dataframe.empty:
+            # filter by key
+            dataframe = dataframe[dataframe.key == msg_key_filter]
+            if filter_on_latest_msg_by_key:
+                # filter by latest offset
+                dataframe = dataframe[dataframe.offset == dataframe[dataframe.key == msg_key_filter]["offset"].max()]
 
         return dataframe
 
+    def extract_value_from_kafka_dataframe(self, dataframe, msg_key_filter):
+        dataframe = self.filter_kafka_data_frame_by_msg_key(dataframe=dataframe, msg_key_filter=msg_key_filter, filter_on_latest_msg_by_key=True)
+        if not dataframe.empty:
+            value = dataframe['value'].values[0]
+        else:
+            value = None
+
+        return value
+
     # todo try catch and dok
     def topic_positions_reached_last_offsets(self, topic_list):
-        
+
         try:
             # init dictionary with Topic -> TopicPartitions
             topic_partitions_dict = self.create_topic_partitions_dict()
+
+            # create list of topic partitions which have not reached last offset
+            topic_partitions_not_reached_last_offset = [topic for topic in topic_list
+                                                        for topic_partition in topic_partitions_dict[topic]
+                                                        if self.consumer.position(topic_partition) < self.consumer.end_offsets([topic_partition])[topic_partition]]
+            # old method without list comprehension
+            """
             topic_partitions_not_reached_last_offset = []
             for topic in topic_list:
                 for topic_partition in topic_partitions_dict[topic]:
-                    if self.consumer.position(topic_partition) < self.consumer.end_offsets([topic_partition])[topic_partition]-1:
+                    if self.consumer.position(topic_partition) < self.consumer.end_offsets([topic_partition])[topic_partition]:
                         topic_partitions_not_reached_last_offset.append(topic_partition)
+            """
 
             # If all partitions have been consumed till latest offset, break out of polling loop
             if len(topic_partitions_not_reached_last_offset) == 0:
@@ -532,6 +463,5 @@ class KafkaHelper:
             else:
                 return False
         except Exception as e:
-            log.exception(f"Checking for last offset for: '{topic_partition}' failed with message '{e}'.")
+            log.exception(f"Checking for last offset for topics: '{topic_list}' failed with message '{e}'.")
             sys.exit(1)
-        
