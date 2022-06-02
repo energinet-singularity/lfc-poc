@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lfc-deplyoment
+  labels:
+    app: lfc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lfc
+  template:
+    metadata:
+      labels:
+        app: lfc
+    spec:
+      containers:
+      - name: lfcpoc-calc-bsp-setpoints
+        image: lfcpoc_calc_bsp_setpoints:latest
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        env:
+            - name: KAFKA_HOST
+              value: localhost

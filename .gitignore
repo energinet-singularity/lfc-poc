@@ -128,12 +128,3 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# simualtor for signals - not for git
-test_signal_gen.ipynb
-
-# testing
-try_it_out.py
-
-# docker compose and deployment yaml file for testing
-docker-compose.yaml
-deployment.yaml

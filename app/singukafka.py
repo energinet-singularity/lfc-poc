@@ -56,7 +56,7 @@ class KafkaHelper:
         self.consumer = None
         self.producer = None
 
-        # methods called to init attributes
+        # methods called to init kafka settings
         self.set_kafka_brooker_from_env()
         self.init_consumer()
         self.verify_topic_existence()
@@ -64,8 +64,6 @@ class KafkaHelper:
             self.subscribe_topics()
         if topics_produced_list:
             self.init_producer()
-
-        # TODO move this init to seek function only ? (DUMMY POLL INIT, only call once or jsut always call before seek?)
         self.init_topic_partitions()
 
     # Method: set kafka brooker from ENV or default to value
@@ -123,17 +121,6 @@ class KafkaHelper:
             log.exception(f"Initial poll failed with message '{e}'.")
             sys.exit(1)
 
-    # Method: Subscribes consumer to topics
-    def subscribe_topics(self):
-        log.debug("Subscribing to consumed kafka topics.")
-        try:
-            self.consumer.subscribe(self.topics_consumed_list)
-            log.info(f"Kafka consumer subscribed to topics: '{self.topics_consumed_list}'.")
-        except Exception as e:
-            log.info(f"Kafka consumer subscribtion to topics: '{self.topics_consumed_list}' " +
-                     f"failed with message: '{e}'.")
-            sys.exit(1)
-
     # Method: Verify if topics exists.
     def verify_topic_existence(self):
         log.debug("Verifying if topics {self.topic_list} exist via Kakfa brooker.")
@@ -151,6 +138,17 @@ class KafkaHelper:
             sys.exit(1)
         else:
             log.debug("All topics exist.")
+
+    # Method: Subscribes consumer to topics
+    def subscribe_topics(self):
+        log.debug("Subscribing to consumed kafka topics.")
+        try:
+            self.consumer.subscribe(self.topics_consumed_list)
+            log.info(f"Kafka consumer subscribed to topics: '{self.topics_consumed_list}'.")
+        except Exception as e:
+            log.info(f"Kafka consumer subscribtion to topics: '{self.topics_consumed_list}' " +
+                     f"failed with message: '{e}'.")
+            sys.exit(1)
 
     # Method: Create a dictionary with partitions availiable for each topic.
     def create_topic_partitions_dict(self):
@@ -361,9 +359,50 @@ class KafkaHelper:
 
     # Method: latest kafka to Pandas
     # TODO: add such that it updates latest msg to attribute, then make function which extract from it and recalls it?
-    # TODO: build in timeout to avopid endless polling?
-    # todo lav try/catch (1 eller flere)
-    def get_kafka_messages_to_pandas_dataframe(self, msg_key_filter=None, get_latest_msg_by_key=False, get_latest_produced_msg_only=True):
+    # TODO: build in timeout to avopid endless polling or init last offset before polling such that it does not change durring poll
+    # TODO: document
+    # TODO: lav try/catch (1 eller flere)
+    def get_kafka_messages_to_pandas_dataframe(self,
+                                               msg_key_filter: str = None,
+                                               get_latest_msg_by_key: bool = False,
+                                               get_latest_produced_msg_only: bool = True
+                                               ) -> pd.DataFrame:
+        """
+        Construct DataFrame from messages avaliable on consumed topics.
+
+        Creates Pandas DataFrame object from Kafka messages on consumed topics.
+        The dataframe will have the follwing columns (reflecting consumer record fields for messages):
+        topic, partion, offset, timestamp, key and value.
+        Each row in the dataframe will contain the values from each field in message.
+
+        The consumed topics is assigned on object initialisation.
+        Filtering on messages keys and offset can be set via parameters.
+
+        Parameters
+        ----------
+        msg_key_filter : str, optional
+            If provided the consumed messages will be filtered by field "key" on messages.
+            (default is None, which means no filtering is done).
+        get_latest_msg_by_key : bool, optional
+            If set true, only the
+            (default is False, which mean)
+            Note: The parameter will be ignored if msg_key_filter is set to None.
+        get_latest_produced_msg_only: bool, optional
+            will either follow offset og consume alle records
+
+        Returns
+        -------
+        DataFrame
+
+        Examples
+        --------
+        1. defualt return all
+        2. filter by key
+        3. latest vs. all
+
+        >>> code
+        result
+        """
 
         time_begin = time()
 
@@ -378,16 +417,17 @@ class KafkaHelper:
         is_polling = True
         while is_polling:
 
-            # poll data from consumer and store in dictionary (topic partition --> List of consumer records)
+            # poll data from consumer and store in dictionary (topic partition --> list of consumer records for partition)
             topic_partition_record_dict = self.consumer.poll(timeout_ms=self.poll_timeout_ms, max_records=None)
 
             # process data, if any returned from the poll
             if topic_partition_record_dict:
 
-                # append consumer records from all consumed topic partitions to list of consumer records
-                record_list = record_list + [record for list in topic_partition_record_dict.values() for record in list]
+                # append consumer records from poll to list of consumer records
+                record_list = record_list + [record for consumer_record_list in topic_partition_record_dict.values()
+                                             for record in consumer_record_list]
 
-            # stop polling when last offset has been reached for all topic partitions
+            # stop polling when last offset has been reached for all topic partitions, meaning all data polled
             if self.topic_positions_reached_last_offsets(topic_list=self.topics_consumed_list):
                 is_polling = False
 
@@ -448,14 +488,6 @@ class KafkaHelper:
             topic_partitions_not_reached_last_offset = [topic for topic in topic_list
                                                         for topic_partition in topic_partitions_dict[topic]
                                                         if self.consumer.position(topic_partition) < self.consumer.end_offsets([topic_partition])[topic_partition]]
-            # old method without list comprehension
-            """
-            topic_partitions_not_reached_last_offset = []
-            for topic in topic_list:
-                for topic_partition in topic_partitions_dict[topic]:
-                    if self.consumer.position(topic_partition) < self.consumer.end_offsets([topic_partition])[topic_partition]:
-                        topic_partitions_not_reached_last_offset.append(topic_partition)
-            """
 
             # If all partitions have been consumed till latest offset, break out of polling loop
             if len(topic_partitions_not_reached_last_offset) == 0:

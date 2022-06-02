@@ -1,0 +1,28 @@
+version: '3.1'
+
+services:
+
+  simu_p_demand:
+    build: .
+    environment:
+      KAFKA_HOST: localhost
+    command: ["python3", "-u", "/app/simu_p_demand.py"]
+
+  calc_p_input:
+    build: .
+    environment:
+      KAFKA_HOST: localhost
+    command: ["python3", "-u", "/app/calc_p_input.py"]
+
+  calc_p_target:
+    build: .
+    environment:
+      KAFKA_HOST: localhost
+    command: ["python3", "-u", "/app/calc_p_target.py"]
+
+  calc_bsp_setpoints:
+      build: .
+      environment:
+        KAFKA_HOST: localhost
+      command: ["python3", "-u", "/app/calc_bsp_setpoints.py"]
+
